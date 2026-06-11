@@ -1,0 +1,41 @@
+{
+  "name": "contentproof",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test:parser": "node lib/parser/htmlParser.test.js",
+    "test:e2e": "node lib/engine.integration.test.js",
+    "test:isolation": "node lib/analysisIsolation.test.js",
+    "test:seo-fallbacks": "node lib/seoFallbacks.test.js",
+    "test:internal-links": "node lib/internalLinks.test.js",
+    "test:readability-blocks": "node lib/readabilityBlocks.test.js",
+    "test:meta-input": "node lib/metaInputFlow.test.js",
+    "test:semantic-meta": "node lib/semanticMetaDescription.test.js",
+    "test:checklist-safety": "node lib/checklistSafety.test.js",
+    "test:publication-status": "node lib/publicationStatus.test.js",
+    "test:url-mode": "node lib/urlMode.test.js",
+    "test:html-mode": "node lib/htmlMode.test.js",
+    "test:faq-polish": "node lib/faqPolishLanguage.test.js",
+    "test": "npm run test:parser && npm run test:e2e && npm run test:isolation && npm run test:seo-fallbacks && npm run test:internal-links && npm run test:readability-blocks && npm run test:meta-input && npm run test:semantic-meta && npm run test:checklist-safety && npm run test:publication-status && npm run test:url-mode && npm run test:html-mode && npm run test:faq-polish"
+  },
+  "dependencies": {
+    "next": "^14.2.35",
+    "react": "^18",
+    "react-dom": "^18"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.0.1",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.35",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
+  }
+}
