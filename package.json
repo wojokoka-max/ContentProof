@@ -23,6 +23,7 @@
     "test": "npm run test:parser && npm run test:e2e && npm run test:isolation && npm run test:seo-fallbacks && npm run test:internal-links && npm run test:readability-blocks && npm run test:meta-input && npm run test:semantic-meta && npm run test:checklist-safety && npm run test:publication-status && npm run test:url-mode && npm run test:html-mode && npm run test:faq-polish"
   },
   "dependencies": {
+    "@vercel/speed-insights": "^2.0.0",
     "next": "^14.2.35",
     "react": "^18",
     "react-dom": "^18"
