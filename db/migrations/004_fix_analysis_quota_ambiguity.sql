@@ -94,7 +94,7 @@ BEGIN
     subject_id, bucket_key, plan, used, limit_value
   )
   VALUES (p_subject_id, v_bucket_key, p_plan, 0, v_limit)
-  ON CONFLICT (subject_id, bucket_key) DO NOTHING;
+  ON CONFLICT ON CONSTRAINT analysis_quota_buckets_pkey DO NOTHING;
 
   UPDATE analysis_quota_buckets AS quota_bucket
   SET used = quota_bucket.used + 1, updated_at = now()

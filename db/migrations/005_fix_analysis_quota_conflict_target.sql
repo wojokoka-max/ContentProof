@@ -1,30 +1,3 @@
-CREATE TABLE IF NOT EXISTS analysis_quota_buckets (
-  subject_id text NOT NULL,
-  bucket_key text NOT NULL,
-  plan text NOT NULL CHECK (plan IN ('guest', 'free', 'premium')),
-  used integer NOT NULL DEFAULT 0 CHECK (used >= 0),
-  limit_value integer NOT NULL CHECK (limit_value > 0),
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (subject_id, bucket_key)
-);
-
-CREATE TABLE IF NOT EXISTS analysis_usage (
-  id uuid PRIMARY KEY,
-  subject_id text NOT NULL,
-  analysis_id text NOT NULL,
-  plan text NOT NULL CHECK (plan IN ('guest', 'free', 'premium', 'admin')),
-  input_mode text NOT NULL CHECK (input_mode IN ('text', 'html', 'url')),
-  bucket_key text,
-  status text NOT NULL CHECK (status IN ('reserved', 'completed')),
-  created_at timestamptz NOT NULL DEFAULT now(),
-  completed_at timestamptz,
-  UNIQUE (subject_id, analysis_id)
-);
-
-CREATE INDEX IF NOT EXISTS analysis_usage_subject_created_idx
-  ON analysis_usage (subject_id, created_at DESC);
-
 CREATE OR REPLACE FUNCTION reserve_analysis_quota(
   p_subject_id text,
   p_analysis_id text,
@@ -56,15 +29,15 @@ BEGIN
       true,
       CASE
         WHEN usage_row.bucket_key IS NULL THEN NULL
-        ELSE GREATEST(bucket.limit_value - bucket.used, 0)
+        ELSE GREATEST(quota_bucket.limit_value - quota_bucket.used, 0)
       END,
-      bucket.limit_value,
+      quota_bucket.limit_value,
       NULL::text,
       usage_row.bucket_key
     FROM analysis_usage AS usage_row
-    LEFT JOIN analysis_quota_buckets AS bucket
-      ON bucket.subject_id = usage_row.subject_id
-      AND bucket.bucket_key = usage_row.bucket_key
+    LEFT JOIN analysis_quota_buckets AS quota_bucket
+      ON quota_bucket.subject_id = usage_row.subject_id
+      AND quota_bucket.bucket_key = usage_row.bucket_key
     WHERE usage_row.subject_id = p_subject_id
       AND usage_row.analysis_id = p_analysis_id
     LIMIT 1;
@@ -95,9 +68,9 @@ BEGIN
       subject_id, bucket_key, plan, used, limit_value
     )
     VALUES (p_subject_id, 'free:starter', 'free', 0, 3)
-    ON CONFLICT (subject_id, bucket_key) DO NOTHING;
+    ON CONFLICT ON CONSTRAINT analysis_quota_buckets_pkey DO NOTHING;
 
-    SELECT used, created_at
+    SELECT quota_bucket.used, quota_bucket.created_at
       INTO v_used, v_starter_created
     FROM analysis_quota_buckets AS quota_bucket
     WHERE quota_bucket.subject_id = p_subject_id
@@ -124,7 +97,7 @@ BEGIN
   ON CONFLICT ON CONSTRAINT analysis_quota_buckets_pkey DO NOTHING;
 
   UPDATE analysis_quota_buckets AS quota_bucket
-  SET used = used + 1, updated_at = now()
+  SET used = quota_bucket.used + 1, updated_at = now()
   WHERE quota_bucket.subject_id = p_subject_id
     AND quota_bucket.bucket_key = v_bucket_key
     AND quota_bucket.used < quota_bucket.limit_value
@@ -145,44 +118,5 @@ BEGIN
   ON CONFLICT (subject_id, analysis_id) DO NOTHING;
 
   RETURN QUERY SELECT true, GREATEST(v_limit - v_used, 0), v_limit, NULL::text, v_bucket_key;
-END;
-$$;
-
-CREATE OR REPLACE FUNCTION complete_analysis_quota(
-  p_subject_id text,
-  p_analysis_id text
-)
-RETURNS void
-LANGUAGE sql
-AS $$
-  UPDATE analysis_usage
-  SET status = 'completed', completed_at = now()
-  WHERE subject_id = p_subject_id
-    AND analysis_id = p_analysis_id
-    AND status = 'reserved';
-$$;
-
-CREATE OR REPLACE FUNCTION release_analysis_quota(
-  p_subject_id text,
-  p_analysis_id text
-)
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  v_bucket_key text;
-BEGIN
-  DELETE FROM analysis_usage
-  WHERE subject_id = p_subject_id
-    AND analysis_id = p_analysis_id
-    AND status = 'reserved'
-  RETURNING bucket_key INTO v_bucket_key;
-
-  IF v_bucket_key IS NOT NULL THEN
-    UPDATE analysis_quota_buckets AS quota_bucket
-    SET used = GREATEST(used - 1, 0), updated_at = now()
-    WHERE quota_bucket.subject_id = p_subject_id
-      AND quota_bucket.bucket_key = v_bucket_key;
-  END IF;
 END;
 $$;
