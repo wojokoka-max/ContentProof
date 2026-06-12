@@ -176,14 +176,13 @@ export default function Home() {
     <div style={{ minHeight: '100vh', background: 'var(--white)' }}>
 
       {/* ── Top bar ──────────────────────────────────────────────────────────── */}
-      <header style={{
+      <header className="app-header" style={{
         borderBottom: '1px solid var(--ink-10)',
-        padding: '0 24px', height: 56,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         position: 'sticky', top: 0,
         background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(12px)', zIndex: 100,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="app-brand" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 28, height: 28, background: 'var(--ink)', borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
               <rect x="1" y="1" width="5" height="5" rx="1" fill="white" opacity="0.9"/>
@@ -192,12 +191,12 @@ export default function Home() {
               <rect x="8" y="8" width="5" height="5" rx="1" fill="white" opacity="0.3"/>
             </svg>
           </div>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, letterSpacing: '-0.01em' }}>
+          <span className="app-brand-name" style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, letterSpacing: '-0.01em' }}>
             ContentProof
           </span>
-          <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--ink-40)', background: 'var(--ink-5)', padding: '2px 6px', borderRadius: 4 }}>MVP</span>
+          <span className="app-version-badge" style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--ink-40)', background: 'var(--ink-5)', padding: '2px 6px', borderRadius: 4 }}>MVP</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div className="app-header-actions" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           {state.phase === 'result' && (
             <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--ink-60)' }}>
               <span>Wynik:</span>

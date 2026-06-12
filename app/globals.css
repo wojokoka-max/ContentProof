@@ -186,6 +186,32 @@ body {
 }
 
 /* ── Account and report actions ─────────────────────────────────────────────── */
+.app-header {
+  min-height: 56px;
+  padding: 0 24px;
+  gap: 16px;
+}
+
+.app-brand,
+.app-header-actions,
+.account-controls {
+  min-width: 0;
+}
+
+.app-header-actions,
+.account-controls {
+  display: flex;
+  align-items: center;
+}
+
+.account-controls {
+  gap: 8px;
+}
+
+.admin-label-mobile {
+  display: none;
+}
+
 .header-link,
 .header-button,
 .header-link-button,
@@ -426,6 +452,48 @@ body {
 }
 
 @media (max-width: 640px) {
+  .app-header {
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  .app-brand {
+    flex: 0 1 auto;
+    gap: 7px !important;
+  }
+
+  .app-brand-name {
+    font-size: 14px !important;
+  }
+
+  .app-version-badge,
+  .account-controls .plan-badge,
+  .account-controls .usage-badge {
+    display: none;
+  }
+
+  .app-header-actions,
+  .account-controls {
+    gap: 4px !important;
+  }
+
+  .header-link,
+  .header-link-button {
+    padding: 7px 4px;
+  }
+
+  .header-button {
+    padding: 7px 8px;
+  }
+
+  .admin-label-desktop {
+    display: none;
+  }
+
+  .admin-label-mobile {
+    display: inline;
+  }
+
   .report-actions {
     width: 100%;
   }

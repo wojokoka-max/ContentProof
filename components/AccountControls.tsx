@@ -34,7 +34,7 @@ export function AccountControls({
 
   if (!account.signedIn) {
     return (
-      <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div className="account-controls no-print">
         <UsageBadge account={account} />
         <Link href="/sign-in" className="header-link">Zaloguj się</Link>
         <Link href="/sign-up" className="header-button">Załóż konto</Link>
@@ -43,7 +43,7 @@ export function AccountControls({
   }
 
   return (
-    <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+    <div className="account-controls no-print">
       {account.isAdmin && (
         <button
           type="button"
@@ -51,7 +51,8 @@ export function AccountControls({
           title="Otwórz analizy wszystkich użytkowników"
           className="header-link-button"
         >
-          Panel admina
+          <span className="admin-label-desktop">Panel admina</span>
+          <span className="admin-label-mobile">Admin</span>
         </button>
       )}
       <button
