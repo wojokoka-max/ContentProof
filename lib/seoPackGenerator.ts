@@ -133,10 +133,58 @@ function titleKeywords(title: string): string[] {
     .filter(word => word.length >= 4 && !stopWords.has(word));
 }
 
+function isProceduralInstruction(text: string): boolean {
+  const cleaned = safeTextCandidate(text).toLowerCase();
+  if (!cleaned) return false;
+
+  return /^(?:następnie\s+|potem\s+|teraz\s+|na koniec\s+|resztę\s+\S+\s+)?(?:dodaj|dopraw|gotuj|miksuj|podgrzej|połącz|pokrój|posyp|przełóż|przykryj|rozgrzej|rozłóż|rozpuść|schłodź|smaż|ubij|umieść|użyj|wlej|włóż|wymieszaj|wyjmij|wsyp|zblenduj|zalej)\b/i.test(cleaned) ||
+    /^(?:next\s+|then\s+|finally\s+)?(?:add|bake|blend|boil|chill|combine|cook|cut|heat|mix|place|pour|preheat|remove|serve|stir|whisk)\b/i.test(cleaned);
+}
+
+function isGenericSectionTitle(text: string): boolean {
+  return /^(?:składniki|przygotowanie|wykonanie|sposób przygotowania|instrukcja|krok po kroku|wskazówki|porady|faq|najczęstsze pytania|najczęstsze błędy|podsumowanie|ingredients|preparation|instructions|method|steps|tips|summary)$/i
+    .test(cleanText(text).trim());
+}
+
+function isUsableTitleSource(text: string | null | undefined): boolean {
+  const cleaned = safeTextCandidate(text);
+  return Boolean(
+    cleaned &&
+    !isGenericSectionTitle(cleaned) &&
+    !isProceduralInstruction(cleaned) &&
+    !isListLikeText(cleaned) &&
+    !/:\s*$/.test(cleaned)
+  );
+}
+
+function isProcedureSectionHeading(heading: string): boolean {
+  return /^(?:przygotowanie|wykonanie|sposób przygotowania|instrukcja|instrukcje|krok po kroku|jak zrobić|method|preparation|instructions|steps)$/i
+    .test(cleanText(heading).trim());
+}
+
+function isProcedureSectionContent(text: string, content: StructuredContent): boolean {
+  const cleaned = cleanText(text).trim();
+  const textPosition = content.plainText.indexOf(cleaned);
+  if (!cleaned || textPosition < 0) return false;
+
+  const headings = [...content.headings].sort((a, b) => a.position - b.position);
+  for (let index = 0; index < headings.length; index++) {
+    const heading = headings[index];
+    if (!isProcedureSectionHeading(heading.text)) continue;
+
+    const sectionStart = heading.position + heading.text.length;
+    const sectionEnd = headings[index + 1]?.position ?? content.plainText.length;
+    if (textPosition >= sectionStart && textPosition < sectionEnd) return true;
+  }
+
+  return false;
+}
+
 function contentSentences(content: StructuredContent): string[] {
   const fromParagraphs = content.paragraphs.flatMap(paragraph => {
     if (isStructuralMetaBlock(paragraph.text, content)) return [];
     if (isFaqSectionContent(paragraph.text, content)) return [];
+    if (content.analysisMode === 'html' && isProcedureSectionContent(paragraph.text, content)) return [];
     return safeTextCandidate(paragraph.text).split(/(?<=[.!?])\s+/);
   });
   const sentenceCandidates = fromParagraphs.length > 0
@@ -146,12 +194,14 @@ function contentSentences(content: StructuredContent): string[] {
   return sentenceCandidates
     .filter(sentence => !isStructuralMetaBlock(sentence, content))
     .filter(sentence => !isFaqSectionContent(sentence, content))
+    .filter(sentence => content.analysisMode !== 'html' || !isProcedureSectionContent(sentence, content))
     .map(sentence => safeTextCandidate(sentence))
     .filter((sentence, index, all) =>
       sentence.length >= 25 &&
       sentence.length <= 240 &&
       !/:\s*$/.test(sentence) &&
       !isListLikeText(sentence) &&
+      (content.analysisMode !== 'html' || !isProceduralInstruction(sentence)) &&
       all.indexOf(sentence) === index
     );
 }
@@ -371,9 +421,14 @@ export function extractMainTopic(content: StructuredContent): {
   topWords: string[];
   slug: string;
 } {
-  const h1 = safeTextCandidate(content.headings.find(h => h.level === 1)?.text)
-    || safeTextCandidate(content.implicitH1)
-    || safeTextCandidate(content.headings[0]?.text);
+  const h1Candidates = [
+    content.headings.find(h => h.level === 1)?.text,
+    content.implicitH1,
+    content.headings[0]?.text,
+  ];
+  const h1 = content.analysisMode === 'html'
+    ? safeTextCandidate(h1Candidates.find(isUsableTitleSource))
+    : safeTextCandidate(h1Candidates.find(candidate => safeTextCandidate(candidate)));
 
   const stopPL = new Set(['sie','się','nie','jak','dla','oraz','przez','jest','są','być','ze','co','ale','czy','już','przy','więcej','tylko','też','ten','tej','tego','które','który','która','na','do','pod','nad']);
   const stopEN = new Set(['the','and','that','this','with','from','what','when','where','which','about']);
@@ -405,22 +460,40 @@ export function extractMainTopic(content: StructuredContent): {
 function firstMeaningfulSentence(content: StructuredContent): string {
   return content.sentences
     .map(sentence => safeTextCandidate(sentence))
-    .find(sentence => sentence.length >= 40 && sentence.length <= 180) ?? '';
+    .find(sentence =>
+      sentence.length >= 40 &&
+      sentence.length <= 180 &&
+      (content.analysisMode !== 'html' || !isProceduralInstruction(sentence)) &&
+      (content.analysisMode !== 'html' || !isProcedureSectionContent(sentence, content)) &&
+      !isStructuralMetaBlock(sentence, content)
+    ) ?? '';
 }
 
 function shortenAtWord(text: string, maxLength: number): string {
   const cleaned = cleanText(text).replace(/\s+/g, ' ').trim();
   if (cleaned.length <= maxLength) return cleaned;
-  return cleaned.slice(0, maxLength).replace(/\s+\S*$/, '').trim();
+  return cleaned
+    .slice(0, maxLength)
+    .replace(/\s+\S*$/, '')
+    .replace(/\s+(?:i|oraz|z|ze|w|we|na|do|and|with|of)$/i, '')
+    .trim();
 }
 
 function titleFromCurrentContent(content: StructuredContent, h1: string): string {
-  const source = safeTextCandidate(h1)
-    || safeTextCandidate(content.headings[0]?.text)
-    || safeTextCandidate(content.implicitH1)
-    || firstMeaningfulSentence(content)
-    || safeTextCandidate(content.paragraphs.find(p => !isListLikeText(p.text))?.text)
-    || safeTextCandidate(content.plainText);
+  const candidates = [
+    h1,
+    content.headings.find(heading => heading.level === 1)?.text,
+    content.implicitH1,
+    content.headings[0]?.text,
+    firstMeaningfulSentence(content),
+    content.paragraphs.find(paragraph =>
+      isUsableTitleSource(paragraph.text) &&
+      !isProcedureSectionContent(paragraph.text, content)
+    )?.text,
+  ];
+  const source = content.analysisMode === 'html'
+    ? safeTextCandidate(candidates.find(isUsableTitleSource))
+    : safeTextCandidate(candidates.find(candidate => safeTextCandidate(candidate)));
   if (!source) return '';
 
   const withoutBrand = source.split(/\s[|–—-]\s/)[0]?.trim() || source;
@@ -448,6 +521,9 @@ function enhanceTitle(title: string, content: StructuredContent): string {
 
 function generateTitle(content: StructuredContent, h1: string): string {
   const existingTitle = safeTextCandidate(content.metaTitle);
+  if (content.analysisMode === 'html' && existingTitle) {
+    return shortenAtWord(existingTitle, 60);
+  }
   if (existingTitle && existingTitle.length >= 30 && existingTitle.length <= 60) {
     return existingTitle;
   }
@@ -471,7 +547,8 @@ function buildDescriptionFromContent(content: StructuredContent, title: string):
   if (validated) return validated;
 
   const rankedFallback = bestEvidence(content, title).find(sentence =>
-    isGoodMetaDescriptionSource(sentence)
+    isGoodMetaDescriptionSource(sentence) &&
+    (content.analysisMode !== 'html' || !isProceduralInstruction(sentence))
   );
   return shortenAtWord(rankedFallback || firstMeaningfulSentence(content), 155);
 }

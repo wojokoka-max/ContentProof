@@ -314,6 +314,87 @@ function findCanonical(html: string): string | null {
   return null;
 }
 
+interface JsonLdMeta {
+  title: string | null;
+  description: string | null;
+  canonical: string | null;
+}
+
+function unwrapMarkdownUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const cleaned = cleanText(value).trim();
+  const markdownUrl = cleaned.match(/^\[(https?:\/\/[^\]]+)\]\(https?:\/\/[^)]+\)$/i);
+  return markdownUrl?.[1] ?? (/^https?:\/\//i.test(cleaned) ? cleaned : null);
+}
+
+function jsonLdEntities(value: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(value)) return value.flatMap(jsonLdEntities);
+  if (!value || typeof value !== 'object') return [];
+
+  const entity = value as Record<string, unknown>;
+  const graph = jsonLdEntities(entity['@graph']);
+  return [entity, ...graph];
+}
+
+function parseJsonLdSource(source: string): unknown | null {
+  const trimmed = source.trim()
+    .replace(/^\s*<!--/, '')
+    .replace(/-->\s*$/, '');
+  if (!trimmed) return null;
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+}
+
+function extractJsonLdMeta(html: string): JsonLdMeta {
+  const scriptSources = [...html.matchAll(
+    /<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
+  )].map(match => match[1]);
+  const trimmed = html.trim();
+  const sources = scriptSources.length > 0
+    ? scriptSources
+    : (/^[\[{]/.test(trimmed) ? [trimmed] : []);
+
+  const entities = sources
+    .map(parseJsonLdSource)
+    .flatMap(jsonLdEntities);
+  const priority = ['Recipe', 'Article', 'BlogPosting', 'NewsArticle', 'HowTo', 'WebPage'];
+  const primary = entities
+    .map(entity => {
+      const rawType = entity['@type'];
+      const types = Array.isArray(rawType) ? rawType : [rawType];
+      const rank = Math.min(...types.map(type => {
+        const index = priority.indexOf(String(type));
+        return index >= 0 ? index : priority.length;
+      }));
+      return { entity, rank };
+    })
+    .filter(item => item.rank < priority.length)
+    .sort((a, b) => a.rank - b.rank)[0]?.entity;
+
+  if (!primary) return { title: null, description: null, canonical: null };
+
+  const mainEntity = primary.mainEntityOfPage;
+  const mainEntityUrl = mainEntity && typeof mainEntity === 'object'
+    ? (mainEntity as Record<string, unknown>)['@id']
+    : null;
+
+  return {
+    title: typeof primary.name === 'string'
+      ? cleanText(primary.name)
+      : typeof primary.headline === 'string'
+        ? cleanText(primary.headline)
+        : null,
+    description: typeof primary.description === 'string'
+      ? cleanText(primary.description)
+      : null,
+    canonical: unwrapMarkdownUrl(primary.url) ?? unwrapMarkdownUrl(mainEntityUrl),
+  };
+}
+
 export function extractMeta(html: string): { metaTitle: string | null; metaDescription: string | null; canonical: string | null } {
   const tm = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   const titleTag = tm ? cleanText(extractPlainText(tm[1])) : null;
@@ -393,11 +474,18 @@ export function parse(
     const links = extractLinks(contentHtml);
     const images = extractImages(contentHtml);
     const faqItems = extractFaqItems(contentHtml);
-    const { metaTitle, metaDescription, canonical: detectedCanonical } = extractMeta(raw);
+    const detectedMeta = extractMeta(raw);
+    const schemaMeta = analysisMode === 'html'
+      ? extractJsonLdMeta(raw)
+      : { title: null, description: null, canonical: null };
+    const metaTitle = detectedMeta.metaTitle ?? schemaMeta.title;
+    const metaDescription = detectedMeta.metaDescription ?? schemaMeta.description;
+    const detectedCanonical = detectedMeta.canonical ?? schemaMeta.canonical;
     const canonical = analysisMode === 'url'
       ? canonicalForUrl(detectedCanonical, sourceUrl)
       : detectedCanonical;
-    const implicitH1 = headings.find(h => h.level === 1)?.text ?? null;
+    const implicitH1 = headings.find(h => h.level === 1)?.text
+      ?? (analysisMode === 'html' ? schemaMeta.title : null);
 
     return {
       raw, analysisHtml: contentHtml, htmlScope,
