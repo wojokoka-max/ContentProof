@@ -15,6 +15,11 @@ export interface AccountState {
   canUseAdvancedModes: boolean;
   canSaveHistory: boolean;
   canExport: boolean;
+  billingConfigured: boolean;
+  billingPeriod: 'monthly' | 'yearly' | null;
+  subscriptionStatus: string | null;
+  cancelAtPeriodEnd: boolean;
+  currentPeriodEnd: string | null;
 }
 
 interface Props {
@@ -66,6 +71,11 @@ export function AccountControls({
       <span className={account.isPremium ? 'plan-badge plan-badge-premium' : 'plan-badge'}>
         {account.isAdmin ? 'Admin' : account.isPremium ? 'Premium' : 'Free'}
       </span>
+      {!account.isAdmin && (
+        <Link href="/pricing" className="header-link">
+          {account.subscriptionStatus ? 'Subskrypcja' : 'Premium'}
+        </Link>
+      )}
       <UsageBadge account={account} />
       <UserButton />
     </div>

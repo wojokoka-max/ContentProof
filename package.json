@@ -22,14 +22,16 @@
     "test:faq-polish": "node lib/faqPolishLanguage.test.js",
     "test:history": "node lib/historySecurity.test.js",
     "test:limits": "node lib/usageLimits.test.js",
-    "test": "npm run test:parser && npm run test:e2e && npm run test:isolation && npm run test:seo-fallbacks && npm run test:internal-links && npm run test:readability-blocks && npm run test:meta-input && npm run test:semantic-meta && npm run test:checklist-safety && npm run test:publication-status && npm run test:url-mode && npm run test:html-mode && npm run test:faq-polish && npm run test:history && npm run test:limits"
+    "test:billing": "node lib/billingSecurity.test.js",
+    "test": "npm run test:parser && npm run test:e2e && npm run test:isolation && npm run test:seo-fallbacks && npm run test:internal-links && npm run test:readability-blocks && npm run test:meta-input && npm run test:semantic-meta && npm run test:checklist-safety && npm run test:publication-status && npm run test:url-mode && npm run test:html-mode && npm run test:faq-polish && npm run test:history && npm run test:limits && npm run test:billing"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.39.5",
     "@neondatabase/serverless": "^1.0.2",
     "next": "^14.2.35",
     "react": "^18",
-    "react-dom": "^18"
+    "react-dom": "^18",
+    "stripe": "^22.2.0"
   },
   "devDependencies": {
     "@types/node": "^20",

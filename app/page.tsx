@@ -30,6 +30,11 @@ export default function Home() {
     canUseAdvancedModes: false,
     canSaveHistory: false,
     canExport: false,
+    billingConfigured: false,
+    billingPeriod: null,
+    subscriptionStatus: null,
+    cancelAtPeriodEnd: false,
+    currentPeriodEnd: null,
   });
   const [historyOpen, setHistoryOpen] = useState(false);
   const [adminHistoryOpen, setAdminHistoryOpen] = useState(false);
@@ -59,6 +64,11 @@ export default function Home() {
           canUseAdvancedModes: Boolean(data.canUseAdvancedModes),
           canSaveHistory: Boolean(data.canSaveHistory),
           canExport: Boolean(data.canExport),
+          billingConfigured: Boolean(data.billingConfigured),
+          billingPeriod: data.billingPeriod ?? null,
+          subscriptionStatus: data.subscriptionStatus ?? null,
+          cancelAtPeriodEnd: Boolean(data.cancelAtPeriodEnd),
+          currentPeriodEnd: data.currentPeriodEnd ?? null,
         });
       })
       .catch(() => undefined);

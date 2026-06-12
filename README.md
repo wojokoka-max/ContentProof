@@ -34,7 +34,8 @@ Historia analiz używa Clerk do logowania i Neon Postgres do przechowywania dany
 1. Skopiuj `.env.example` do `.env.local` i uzupełnij klucze Clerk oraz `DATABASE_URL`.
 2. Uruchom migrację `db/migrations/001_analysis_history.sql` w konsoli SQL bazy Neon.
 3. Uruchom migrację `db/migrations/002_analysis_limits.sql`, aby włączyć limity planów.
-4. Ustaw użytkownikowi Clerk `publicMetadata.plan` na `premium`. W testach można też wpisać identyfikator użytkownika do `PREMIUM_USER_IDS`.
+4. Uruchom migrację `db/migrations/003_billing_subscriptions.sql`, aby przygotować płatności.
+5. Ustaw użytkownikowi Clerk `publicMetadata.plan` na `premium`. W testach można też wpisać identyfikator użytkownika do `PREMIUM_USER_IDS`.
 
 Analizy nie zapisują się automatycznie. Użytkownik Premium zapisuje konkretny wynik przyciskiem „Zachowaj analizę”.
 
@@ -54,3 +55,24 @@ Panel administratora nie zmienia wyników analizatora. Daje wyłącznie dostęp 
 - Administrator: wszystkie funkcje bez limitu.
 
 Nieudana analiza ani błąd pobierania adresu URL nie zużywa limitu.
+
+## Płatności Stripe
+
+Płatności korzystają ze Stripe Checkout i pozostają w trybie testowym, dopóki używane są testowe klucze Stripe.
+
+Wymagane zmienne:
+
+- `NEXT_PUBLIC_APP_URL`
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_PRICE_MONTHLY`
+- `STRIPE_PRICE_YEARLY`
+
+Webhook Stripe powinien wskazywać na `/api/billing/webhook` i obsługiwać:
+
+- `checkout.session.completed`
+- `customer.subscription.created`
+- `customer.subscription.updated`
+- `customer.subscription.deleted`
+
+Dostęp Premium jest nadawany na podstawie podpisanego webhooka i aktywnej subskrypcji zapisanej w Neon. Sam powrót użytkownika ze strony płatności nie zmienia planu.

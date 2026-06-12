@@ -1,4 +1,5 @@
 import { auth, currentUser } from '@clerk/nextjs/server';
+import { getBillingAccess, type BillingPeriod } from './billing';
 
 export interface AccountAccess {
   configured: boolean;
@@ -6,6 +7,11 @@ export interface AccountAccess {
   userId: string | null;
   isPremium: boolean;
   isAdmin: boolean;
+  billingConfigured: boolean;
+  billingPeriod: BillingPeriod | null;
+  subscriptionStatus: string | null;
+  cancelAtPeriodEnd: boolean;
+  currentPeriodEnd: string | null;
 }
 
 export function isAuthConfigured(): boolean {
@@ -17,12 +23,12 @@ export function isAuthConfigured(): boolean {
 
 export async function getAccountAccess(): Promise<AccountAccess> {
   if (!isAuthConfigured()) {
-    return { configured: false, signedIn: false, userId: null, isPremium: false, isAdmin: false };
+    return emptyAccountAccess(false);
   }
 
   const { userId } = await auth();
   if (!userId) {
-    return { configured: true, signedIn: false, userId: null, isPremium: false, isAdmin: false };
+    return emptyAccountAccess(true);
   }
 
   const user = await currentUser();
@@ -39,11 +45,39 @@ export async function getAccountAccess(): Promise<AccountAccess> {
     metadata.role === 'admin' ||
     metadata.admin === true ||
     adminUserIds.includes(userId);
+  const billing = await getBillingAccess(userId);
   const isPremium =
     isAdmin ||
+    billing.isSubscriber ||
     metadata.plan === 'premium' ||
     metadata.premium === true ||
     premiumUserIds.includes(userId);
 
-  return { configured: true, signedIn: true, userId, isPremium, isAdmin };
+  return {
+    configured: true,
+    signedIn: true,
+    userId,
+    isPremium,
+    isAdmin,
+    billingConfigured: billing.configured,
+    billingPeriod: billing.billingPeriod,
+    subscriptionStatus: billing.subscriptionStatus,
+    cancelAtPeriodEnd: billing.cancelAtPeriodEnd,
+    currentPeriodEnd: billing.currentPeriodEnd,
+  };
+}
+
+function emptyAccountAccess(configured: boolean): AccountAccess {
+  return {
+    configured,
+    signedIn: false,
+    userId: null,
+    isPremium: false,
+    isAdmin: false,
+    billingConfigured: false,
+    billingPeriod: null,
+    subscriptionStatus: null,
+    cancelAtPeriodEnd: false,
+    currentPeriodEnd: null,
+  };
 }
