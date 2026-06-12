@@ -202,19 +202,86 @@ function summarizeFaqAnswer(text: string): string | null {
   return trimmedAnswer.length >= 80 ? trimmedAnswer : null;
 }
 
-function hasNaturalFaqFlow(answer: string, lang: 'pl' | 'en'): boolean {
+function hasNaturalFaqFlow(answer: string): boolean {
   const sentences = answer
     .split(/(?<=[.!?…])\s+/)
     .map(sentence => sentence.trim())
     .filter(Boolean);
 
-  if (sentences.length >= 2) return true;
+  return sentences.length >= 2 && sentences.length <= 3;
+}
 
-  const conversationalConnector = lang === 'pl'
-    ? /\b(ale|bo|chociaż|dlatego|dzięki temu|gdy|jeśli|jednak|kiedy|który|która|które|ponieważ|więc|żeby|że)\b/i
-    : /\b(although|because|but|if|however|so|that|therefore|when|which|while)\b/i;
+function faqEvidenceWords(text: string): string[] {
+  const stopWords = new Set([
+    'albo', 'bardzo', 'bedzie', 'byc', 'czy', 'dla', 'dlaczego', 'jest', 'jak',
+    'jaka', 'jakie', 'jaki', 'kiedy', 'ktore', 'ktory', 'mozna', 'oraz', 'sie',
+    'tego', 'ten', 'to', 'trzeba', 'warto', 'what', 'when', 'where', 'which',
+    'with', 'without', 'why', 'will', 'your',
+  ]);
 
-  return conversationalConnector.test(answer);
+  return cleanText(text)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .split(/\s+/)
+    .filter(word => word.length >= 4 && !stopWords.has(word));
+}
+
+function findFaqSupportingSentence(
+  content: StructuredContent,
+  question: string,
+  answer: string
+): string | null {
+  const evidence = new Set(faqEvidenceWords(`${question} ${answer}`));
+  if (evidence.size === 0) return null;
+
+  const normalizedAnswer = cleanText(answer).toLowerCase();
+  let best: { sentence: string; score: number } | null = null;
+
+  for (const rawSentence of content.sentences) {
+    const sentence = cleanText(rawSentence).replace(/\s+/g, ' ').trim();
+    if (sentence.length < 45 || sentence.length > 240) continue;
+    if (!/[.!?…]$/.test(sentence)) continue;
+    if (normalizedAnswer.includes(sentence.toLowerCase()) || sentence.toLowerCase().includes(normalizedAnswer)) {
+      continue;
+    }
+    if (isImperativeFaqAnswer(sentence, content.language)) continue;
+    if (/^(dodaj|krok|następnie|przygotowanie|składniki|wykonanie)\b/i.test(sentence)) continue;
+
+    const sentenceWords = faqEvidenceWords(sentence);
+    const matchedWords = sentenceWords.filter(word => evidence.has(word));
+    const hasStrongMatch = matchedWords.some(word => word.length >= 8);
+    const score = matchedWords.length * 10 - Math.abs(sentence.length - 120) / 30;
+    if ((matchedWords.length < 2 && !hasStrongMatch) || (best && score <= best.score)) continue;
+    best = { sentence, score };
+  }
+
+  return best?.sentence ?? null;
+}
+
+function buildPublishableFaqAnswer(
+  content: StructuredContent,
+  question: string,
+  rawAnswer: string
+): string | null {
+  const cleaned = cleanText(rawAnswer).replace(/\s+/g, ' ').trim();
+  if (!cleaned) return null;
+
+  const sentences = cleaned
+    .split(/(?<=[.!?…])\s+/)
+    .map(sentence => sentence.trim())
+    .filter(Boolean);
+
+  if (sentences.length >= 2) {
+    return summarizeFaqAnswer(sentences.slice(0, 3).join(' '));
+  }
+
+  const firstSentence = /[.!?…]$/.test(cleaned) ? cleaned : `${cleaned}.`;
+  const supportingSentence = findFaqSupportingSentence(content, question, firstSentence);
+  if (!supportingSentence) return null;
+
+  return summarizeFaqAnswer(`${firstSentence} ${supportingSentence}`);
 }
 
 function isImperativeFaqAnswer(answer: string, lang: 'pl' | 'en'): boolean {
@@ -347,7 +414,7 @@ function generateUrlFaqFallback(
       item.answer &&
       isQuestionValid(item.question, h1) &&
       isPublishableFaqItem(item) &&
-      hasNaturalFaqFlow(item.answer, content.language)
+      hasNaturalFaqFlow(item.answer)
     );
 }
 
@@ -396,7 +463,7 @@ function generateFaqFromArticleSentences(
         !item.answer ||
         !isQuestionValid(item.question, h1) ||
         !isPublishableFaqItem(item) ||
-        !hasNaturalFaqFlow(item.answer, content.language)
+        !hasNaturalFaqFlow(item.answer)
       ) return false;
       const answerKey = item.answer.toLowerCase().replace(/\W+/g, ' ').trim().slice(0, 120);
       if (seenAnswers.has(answerKey)) return false;
@@ -456,7 +523,7 @@ function generateRecipeFaqFromEvidence(
       item.answer &&
       isQuestionValid(item.question, h1) &&
       isPublishableFaqItem(item) &&
-      hasNaturalFaqFlow(item.answer, content.language)
+      hasNaturalFaqFlow(item.answer)
     );
 }
 
@@ -525,7 +592,7 @@ function generateRecipeProcessFaq(
   return items.filter(item =>
     isQuestionValid(item.question, h1) &&
     isPublishableFaqItem(item) &&
-    hasNaturalFaqFlow(item.answer, content.language)
+    hasNaturalFaqFlow(item.answer)
   );
 }
 
@@ -551,6 +618,12 @@ function isPublishableFaqItem(item: { question: string; answer: string }): boole
 
   if (!question.endsWith('?')) return false;
   if (answer.length < 80) return false;
+  const sentenceCount = answer
+    .split(/(?<=[.!?…])\s+/)
+    .map(sentence => sentence.trim())
+    .filter(Boolean)
+    .length;
+  if (sentenceCount < 2 || sentenceCount > 3) return false;
   if (/\b\d+\.$/.test(answer)) return false;
   const bulletCount = (answer.match(/(?:^|\s)[-*•]\s+\S/g) ?? []).length;
   if (bulletCount >= 3) return false;
@@ -752,7 +825,8 @@ function generateFaqFromContent(content: StructuredContent): Array<{ question: s
 
   const addQuestion = (item: { question: string; answer: string }): void => {
     const question = cleanText(cleanQuestion(item.question));
-    const answer = summarizeFaqAnswer(item.answer) ?? cleanText(item.answer);
+    const answer = buildPublishableFaqAnswer(content, question, item.answer);
+    if (!answer) return;
     const normalized = { question, answer };
     if (!isQuestionValid(question, h1) || !isPublishableFaqItem(normalized)) return;
 
@@ -806,7 +880,7 @@ function generateFaqFromContent(content: StructuredContent): Array<{ question: s
     const answer = answerFromSection(content, h2);
     if (!answer) continue;
     const item = { question: q, answer };
-    if (!isPublishableFaqItem(item) || !hasNaturalFaqFlow(item.answer, lang)) continue;
+    if (!isPublishableFaqItem(item) || !hasNaturalFaqFlow(item.answer)) continue;
     addQuestion(item);
     if (questions.length >= 6) break;
   }

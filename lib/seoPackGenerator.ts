@@ -594,7 +594,7 @@ function generateJsonLd(
   };
 
   const seenQuestions = new Set<string>();
-  const validFaqItems = [...content.faqItems, ...faqItems].filter(item => {
+  const validFaqItems = [...faqItems, ...content.faqItems].filter(item => {
     const question = item.question.trim();
     const answer = item.answer.trim();
     const key = normalizeForMatch(question);
