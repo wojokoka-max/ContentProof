@@ -95,7 +95,7 @@ BEGIN
       subject_id, bucket_key, plan, used, limit_value
     )
     VALUES (p_subject_id, 'free:starter', 'free', 0, 3)
-    ON CONFLICT (subject_id, bucket_key) DO NOTHING;
+    ON CONFLICT DO NOTHING;
 
     SELECT used, created_at
       INTO v_used, v_starter_created
@@ -121,7 +121,7 @@ BEGIN
     subject_id, bucket_key, plan, used, limit_value
   )
   VALUES (p_subject_id, v_bucket_key, p_plan, 0, v_limit)
-  ON CONFLICT ON CONSTRAINT analysis_quota_buckets_pkey DO NOTHING;
+  ON CONFLICT DO NOTHING;
 
   UPDATE analysis_quota_buckets AS quota_bucket
   SET used = used + 1, updated_at = now()
