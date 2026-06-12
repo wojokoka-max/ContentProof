@@ -2,6 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { analyze } from '@/lib/engine';
 import { isUrl, fetchUrl } from '@/lib/fetcher';
 import type { InputMode, MetaInput } from '@/lib/types';
+import { detectInputMode } from '@/lib/parser/htmlParser';
+import { getAccountAccess } from '@/lib/auth';
+import {
+  completeQuota,
+  quotaErrorMessage,
+  releaseQuota,
+  reserveQuota,
+  type QuotaReservation,
+} from '@/lib/usageLimits';
 
 function normalizeInputMode(mode: unknown): InputMode | undefined {
   if (mode === 'article') return 'text';
@@ -9,10 +18,20 @@ function normalizeInputMode(mode: unknown): InputMode | undefined {
   return undefined;
 }
 
-function jsonNoStore(body: unknown, init?: ResponseInit) {
+function jsonNoStore(body: unknown, init?: ResponseInit, guestId?: string) {
   const headers = new Headers(init?.headers);
   headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-  return NextResponse.json(body, { ...init, headers });
+  const response = NextResponse.json(body, { ...init, headers });
+  if (guestId) {
+    response.cookies.set('cp_guest_id', guestId, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 24 * 365,
+      path: '/',
+    });
+  }
+  return response;
 }
 
 function normalizeMetaInput(value: unknown): MetaInput | undefined {
@@ -29,17 +48,44 @@ function normalizeMetaInput(value: unknown): MetaInput | undefined {
 }
 
 export async function POST(req: NextRequest) {
+  let reservation: QuotaReservation | null = null;
+  let analysisId = crypto.randomUUID();
   try {
     const body = await req.json();
     const raw: string = (body?.content ?? '').trim();
     const forcedMode = normalizeInputMode(body?.mode);
     const metaInput = normalizeMetaInput(body?.metaInput);
-    const analysisId: string = typeof body?.analysisId === 'string' && body.analysisId
+    analysisId = typeof body?.analysisId === 'string' && body.analysisId
       ? body.analysisId
       : crypto.randomUUID();
+    const guestId = req.cookies.get('cp_guest_id')?.value || crypto.randomUUID();
 
     if (!raw) {
       return jsonNoStore({ error: 'Treść nie może być pusta.', analysisId }, { status: 400 });
+    }
+
+    if (!isUrl(raw) && raw.length > 200_000) {
+      return jsonNoStore(
+        { error: 'Treść jest zbyt długa (max 200 000 znaków).', analysisId },
+        { status: 400 }
+      );
+    }
+
+    const detectedMode = isUrl(raw) ? 'url' : detectInputMode(raw);
+    const effectiveMode: InputMode = detectedMode === 'html'
+      ? 'html'
+      : (forcedMode ?? detectedMode);
+    const access = await getAccountAccess();
+    reservation = await reserveQuota(access, guestId, analysisId, effectiveMode);
+
+    if (!reservation.allowed) {
+      return jsonNoStore({
+        error: quotaErrorMessage(reservation.reason, reservation.plan),
+        code: reservation.reason,
+        plan: reservation.plan,
+        remaining: reservation.remaining,
+        analysisId,
+      }, { status: 403 }, guestId);
     }
 
     // ── URL mode ───────────────────────────────────────────────────────────────
@@ -54,12 +100,13 @@ export async function POST(req: NextRequest) {
       );
 
       if (isUnrecoverable) {
+        await releaseQuota(reservation.subjectId, analysisId, reservation.plan);
         return jsonNoStore({
           error: debug.error ?? 'Nie udało się pobrać treści strony.',
           fetchDebug: debug,
           isUrlFetchError: true,
           analysisId,
-        }, { status: 422 });
+        }, { status: 422 }, guestId);
       }
 
       // Soft case: got some HTML but very little text (bot-blocked or JS-only shell)
@@ -72,42 +119,56 @@ export async function POST(req: NextRequest) {
           .replace(/\s+/g, ' ').trim();
 
         if (plainText.length < 200) {
+          await releaseQuota(reservation.subjectId, analysisId, reservation.plan);
           // Too little content — return error with debug instead of a fake report
           return jsonNoStore({
             error: debug.error ?? 'Strona zwróciła zbyt mało treści do analizy. Serwer prawdopodobnie blokuje automatyczne pobieranie.',
             fetchDebug: debug,
             isUrlFetchError: true,
             analysisId,
-          }, { status: 422 });
+          }, { status: 422 }, guestId);
         }
 
         const result = analyze(html, 'url', analysisId, undefined, debug.fetchedUrl || raw);
         result.fetchDebug = debug;
-        return jsonNoStore(result);
+        await completeQuota(reservation.subjectId, analysisId, reservation.plan);
+        return jsonNoStore({
+          ...result,
+          usage: {
+            plan: reservation.plan,
+            remaining: reservation.remaining,
+            limit: reservation.limit,
+          },
+        }, undefined, guestId);
       }
 
       // Fallback: empty html, no specific error
+      await releaseQuota(reservation.subjectId, analysisId, reservation.plan);
       return jsonNoStore({
         error: 'Nie udało się pobrać treści strony. Spróbuj wkleić HTML ręcznie.',
         fetchDebug: debug,
         isUrlFetchError: true,
         analysisId,
-      }, { status: 422 });
+      }, { status: 422 }, guestId);
     }
 
     // ── Manual content mode ────────────────────────────────────────────────────
-    if (raw.length > 200_000) {
-      return jsonNoStore(
-        { error: 'Treść jest zbyt długa (max 200 000 znaków).', analysisId },
-        { status: 400 }
-      );
-    }
-
     const result = analyze(raw, forcedMode, analysisId, forcedMode === 'text' ? metaInput : undefined);
-    return jsonNoStore(result);
+    await completeQuota(reservation.subjectId, analysisId, reservation.plan);
+    return jsonNoStore({
+      ...result,
+      usage: {
+        plan: reservation.plan,
+        remaining: reservation.remaining,
+        limit: reservation.limit,
+      },
+    }, undefined, guestId);
 
   } catch (err) {
     console.error('[/api/analyze]', err);
-    return jsonNoStore({ error: 'Błąd analizy. Spróbuj ponownie.' }, { status: 500 });
+    if (reservation?.allowed) {
+      await releaseQuota(reservation.subjectId, analysisId, reservation.plan).catch(() => undefined);
+    }
+    return jsonNoStore({ error: 'Błąd analizy. Spróbuj ponownie.', analysisId }, { status: 500 });
   }
 }

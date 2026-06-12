@@ -1,10 +1,13 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AnalysisResult, FetchDebug, InputMode, MetaInput } from '@/lib/types';
+import type { SavedAnalysis } from '@/lib/history';
 import { ContentInput }    from '@/components/ContentInput';
 import { AnalysisReport }  from '@/components/AnalysisReport';
 import { FetchDebugPanel } from '@/components/FetchDebugPanel';
+import { AccountControls, type AccountState } from '@/components/AccountControls';
+import { HistoryPanel } from '@/components/HistoryPanel';
 
 type AppState =
   | { phase: 'input' }
@@ -15,8 +18,55 @@ type AppState =
 
 export default function Home() {
   const [state, setState] = useState<AppState>({ phase: 'input' });
+  const [account, setAccount] = useState<AccountState>({
+    configured: false,
+    signedIn: false,
+    isPremium: false,
+    isAdmin: false,
+    historyReady: false,
+    plan: 'guest',
+    remaining: 1,
+    limit: 1,
+    canUseAdvancedModes: false,
+    canSaveHistory: false,
+    canExport: false,
+  });
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [adminHistoryOpen, setAdminHistoryOpen] = useState(false);
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const currentAnalysisIdRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const authEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+
+  useEffect(() => {
+    if (!authEnabled) return;
+
+    let active = true;
+    fetch('/api/account', { cache: 'no-store' })
+      .then(response => response.json())
+      .then(data => {
+        if (!active) return;
+        setAccount({
+          configured: Boolean(data.configured),
+          signedIn: Boolean(data.signedIn),
+          isPremium: Boolean(data.isPremium),
+          isAdmin: Boolean(data.isAdmin),
+          historyReady: Boolean(data.historyReady),
+          plan: data.plan ?? 'guest',
+          remaining: typeof data.remaining === 'number' ? data.remaining : null,
+          limit: typeof data.limit === 'number' ? data.limit : null,
+          canUseAdvancedModes: Boolean(data.canUseAdvancedModes),
+          canSaveHistory: Boolean(data.canSaveHistory),
+          canExport: Boolean(data.canExport),
+        });
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, [authEnabled]);
 
   async function handleAnalyze(content: string, mode: InputMode = 'text', metaInput?: MetaInput) {
     const analysisId = crypto.randomUUID();
@@ -24,6 +74,7 @@ export default function Home() {
     abortControllerRef.current?.abort();
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
+    setSaveStatus('idle');
 
     setState({ phase: 'loading', content, analysisId });
     try {
@@ -56,6 +107,14 @@ export default function Home() {
       }
 
       setState({ phase: 'result', result: data as AnalysisResult, content });
+      if (data.usage) {
+        setAccount(current => ({
+          ...current,
+          plan: data.usage.plan ?? current.plan,
+          remaining: typeof data.usage.remaining === 'number' ? data.usage.remaining : null,
+          limit: typeof data.usage.limit === 'number' ? data.usage.limit : null,
+        }));
+      }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       if (currentAnalysisIdRef.current !== analysisId) return;
@@ -66,8 +125,52 @@ export default function Home() {
   function handleReset() {
     currentAnalysisIdRef.current = null;
     abortControllerRef.current?.abort();
+    setSaveStatus('idle');
     setState({ phase: 'input' });
   }
+
+  async function handleSaveAnalysis() {
+    if (state.phase !== 'result' || !account.isPremium || !account.historyReady) return;
+
+    setSaveStatus('saving');
+    const title = state.result.seoPack.title
+      || state.result.meta.detectedH1
+      || 'Analiza bez tytułu';
+    const sourceLabel = state.result.meta.analysisMode === 'url'
+      ? state.content.trim()
+      : null;
+
+    try {
+      const response = await fetch('/api/history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          analysisId: state.result.analysisId,
+          title,
+          inputMode: state.result.meta.analysisMode,
+          sourceLabel,
+          input: state.content,
+          result: state.result,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? 'Nie udało się zachować analizy.');
+
+      setSaveStatus('saved');
+      setHistoryRefreshKey(value => value + 1);
+    } catch {
+      setSaveStatus('error');
+    }
+  }
+
+  function handleOpenSavedAnalysis(saved: SavedAnalysis) {
+    currentAnalysisIdRef.current = null;
+    abortControllerRef.current?.abort();
+    setSaveStatus('saved');
+    setState({ phase: 'result', result: saved.result, content: saved.input });
+  }
+
+  const saveAccess = getSaveAccess(account, saveStatus);
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--white)' }}>
@@ -94,12 +197,20 @@ export default function Home() {
           </span>
           <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--ink-40)', background: 'var(--ink-5)', padding: '2px 6px', borderRadius: 4 }}>MVP</span>
         </div>
-        {state.phase === 'result' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--ink-60)' }}>
-            <span>Wynik:</span>
-            <span style={{ fontWeight: 600, color: 'var(--ink)' }}>{state.result.overallScore}/100</span>
-          </div>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {state.phase === 'result' && (
+            <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--ink-60)' }}>
+              <span>Wynik:</span>
+              <span style={{ fontWeight: 600, color: 'var(--ink)' }}>{state.result.overallScore}/100</span>
+            </div>
+          )}
+          <AccountControls
+            authEnabled={authEnabled}
+            account={account}
+            onOpenHistory={() => setHistoryOpen(true)}
+            onOpenAdminHistory={() => setAdminHistoryOpen(true)}
+          />
+        </div>
       </header>
 
       {/* ── Main ─────────────────────────────────────────────────────────────── */}
@@ -118,7 +229,11 @@ export default function Home() {
               </p>
             </div>
             <div className="animate-fade-up" style={{ animationDelay: '80ms' }}>
-              <ContentInput onAnalyze={handleAnalyze} loading={false} />
+              <ContentInput
+                onAnalyze={handleAnalyze}
+                loading={false}
+                canUseAdvancedModes={account.canUseAdvancedModes}
+              />
               {state.phase === 'error' && (
                 <div style={{ marginTop: 16, padding: '12px 16px', background: 'var(--signal-red-bg)', border: '1px solid #fecaca', borderRadius: 'var(--radius-md)', color: 'var(--signal-red)', fontSize: 13 }}>
                   {state.message}
@@ -132,7 +247,11 @@ export default function Home() {
         {/* Loading phase */}
         {state.phase === 'loading' && (
           <div className="animate-fade-in">
-            <ContentInput onAnalyze={handleAnalyze} loading={true} />
+            <ContentInput
+              onAnalyze={handleAnalyze}
+              loading={true}
+              canUseAdvancedModes={account.canUseAdvancedModes}
+            />
             <LoadingState isUrl={isUrlLike(state.content)} />
           </div>
         )}
@@ -179,17 +298,60 @@ export default function Home() {
               key={state.result.analysisId}
               result={state.result}
               onReset={handleReset}
+              onSave={() => void handleSaveAnalysis()}
+              saveStatus={saveStatus}
+              canSave={saveAccess.canSave}
+              saveHint={saveAccess.hint}
+              canExport={account.canExport}
+              hasFullSeoPack={account.isPremium}
             />
           </div>
         )}
 
       </main>
+      <HistoryPanel
+        open={historyOpen}
+        account={account}
+        refreshKey={historyRefreshKey}
+        onClose={() => setHistoryOpen(false)}
+        onOpenAnalysis={handleOpenSavedAnalysis}
+      />
+      <HistoryPanel
+        open={adminHistoryOpen}
+        account={account}
+        adminMode
+        refreshKey={historyRefreshKey}
+        onClose={() => setAdminHistoryOpen(false)}
+        onOpenAnalysis={handleOpenSavedAnalysis}
+      />
     </div>
   );
 }
 
 function isUrlLike(s: string): boolean {
   return /^https?:\/\//i.test(s.trim());
+}
+
+function getSaveAccess(
+  account: AccountState,
+  saveStatus: 'idle' | 'saving' | 'saved' | 'error'
+): { canSave: boolean; hint: string } {
+  if (!account.configured) {
+    return { canSave: false, hint: 'Logowanie nie jest jeszcze skonfigurowane.' };
+  }
+  if (!account.signedIn) {
+    return { canSave: false, hint: 'Zaloguj się, aby zachować analizę.' };
+  }
+  if (!account.isPremium) {
+    return { canSave: false, hint: 'Historia analiz jest dostępna w planie Premium.' };
+  }
+  if (!account.historyReady) {
+    return { canSave: false, hint: 'Baza historii nie jest jeszcze skonfigurowana.' };
+  }
+  if (saveStatus === 'error') {
+    return { canSave: true, hint: 'Zapis nie powiódł się. Spróbuj ponownie.' };
+  }
+  return { canSave: true, hint: 'Zapisz aktualny wynik w historii Premium.' };
 }
 
 // ── Features strip ────────────────────────────────────────────────────────────

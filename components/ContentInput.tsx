@@ -6,6 +6,7 @@ import type { InputMode, MetaInput, MetaInputMode } from '@/lib/types';
 interface Props {
   onAnalyze: (content: string, mode: InputMode, metaInput?: MetaInput) => void;
   loading: boolean;
+  canUseAdvancedModes: boolean;
 }
 
 const MODES: Array<{ id: InputMode; label: string; icon: string; hint: string }> = [
@@ -47,26 +48,31 @@ function detectModeFromContent(text: string): InputMode {
   return 'text';
 }
 
-export function ContentInput({ onAnalyze, loading }: Props) {
+export function ContentInput({ onAnalyze, loading, canUseAdvancedModes }: Props) {
   const [content, setContent] = useState('');
   const [mode, setMode] = useState<InputMode>('text');
   const [autoDetected, setAutoDetected] = useState(false);
   const [metaMode, setMetaMode] = useState<MetaInputMode>('generate');
   const [metaTitle, setMetaTitle] = useState('');
   const [metaDescription, setMetaDescription] = useState('');
+  const [premiumNotice, setPremiumNotice] = useState('');
 
   useEffect(() => {
     if (content.length <= 30) return;
 
     const detected = detectModeFromContent(content);
     if (detected === mode) return;
+    if (!canUseAdvancedModes && detected !== 'text') {
+      setPremiumNotice('Analiza HTML i URL jest dostępna w Premium. W wersji Free możesz analizować pełny tekst artykułu.');
+      return;
+    }
 
     setMode(detected);
     setAutoDetected(true);
 
     const timeoutId = window.setTimeout(() => setAutoDetected(false), 3000);
     return () => window.clearTimeout(timeoutId);
-  }, [content, mode]);
+  }, [canUseAdvancedModes, content, mode]);
 
   const isUrl = mode === 'url' && /^https?:\/\//i.test(content.trim());
   const hasProvidedMeta = metaTitle.trim().length > 0 || metaDescription.trim().length > 0;
@@ -76,8 +82,13 @@ export function ContentInput({ onAnalyze, loading }: Props) {
   const charCount = content.length;
 
   function selectMode(nextMode: InputMode) {
+    if (!canUseAdvancedModes && nextMode !== 'text') {
+      setPremiumNotice('Ten tryb jest dostępny w Premium. Sprawdza opublikowaną stronę lub kod HTML wraz z meta danymi, canonical i schema.');
+      return;
+    }
     setMode(nextMode);
     setAutoDetected(false);
+    setPremiumNotice('');
   }
 
   function handleSubmit(event: React.FormEvent) {
@@ -128,9 +139,19 @@ export function ContentInput({ onAnalyze, loading }: Props) {
           >
             <span style={{ fontSize: 11, opacity: 0.7 }}>{item.icon}</span>
             {item.label}
+            {!canUseAdvancedModes && item.id !== 'text' && (
+              <span className="premium-mode-badge">Premium</span>
+            )}
           </button>
         ))}
       </div>
+
+      {premiumNotice && (
+        <div className="premium-notice" role="status">
+          <strong>Funkcja Premium</strong>
+          <span>{premiumNotice}</span>
+        </div>
+      )}
 
       {autoDetected && (
         <div className="animate-fade-in" style={{

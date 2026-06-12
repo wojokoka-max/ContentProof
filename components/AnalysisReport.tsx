@@ -13,6 +13,12 @@ import { FixAllPanel }        from './FixAllPanel';
 interface Props {
   result: AnalysisResult;
   onReset: () => void;
+  onSave: () => void;
+  saveStatus: 'idle' | 'saving' | 'saved' | 'error';
+  canSave: boolean;
+  saveHint: string;
+  canExport: boolean;
+  hasFullSeoPack: boolean;
 }
 
 const LANG_LABEL: Record<string, string> = { pl: 'Polski', en: 'Angielski' };
@@ -21,7 +27,16 @@ const MODE_COLOR: Record<string, string> = { text: 'var(--signal-green)', html: 
 
 type MainTab = 'overview' | 'seo-pack' | 'expansion' | 'checklist';
 
-export function AnalysisReport({ result, onReset }: Props) {
+export function AnalysisReport({
+  result,
+  onReset,
+  onSave,
+  saveStatus,
+  canSave,
+  saveHint,
+  canExport,
+  hasFullSeoPack,
+}: Props) {
   const [mainTab, setMainTab] = useState<MainTab>('overview');
 
   const issueCount = result.checklist.filter(i => i.status !== 'pass').length;
@@ -54,13 +69,35 @@ export function AnalysisReport({ result, onReset }: Props) {
             <span>{new Date(result.analyzedAt).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</span>
           </div>
         </div>
-        <button onClick={onReset} style={{
-          padding: '7px 14px', background: 'var(--ink-5)',
-          border: '1px solid var(--ink-10)', borderRadius: 8,
-          fontSize: 13, fontFamily: 'var(--font-sans)', cursor: 'pointer', color: 'var(--ink)',
-        }}>
-          ← Nowa analiza
-        </button>
+        <div className="report-actions no-print">
+          <button
+            type="button"
+            onClick={() => canExport && window.print()}
+            disabled={!canExport}
+            title={canExport ? 'Drukuj lub zapisz raport jako PDF' : 'Eksport PDF jest dostępny w Premium'}
+            className="report-action-button"
+          >
+            {canExport ? 'Drukuj / PDF' : 'PDF · Premium'}
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={!canSave || saveStatus === 'saving'}
+            title={saveHint}
+            className="report-action-button report-save-button"
+          >
+            {saveStatus === 'saving'
+              ? 'Zapisywanie...'
+              : saveStatus === 'saved'
+                ? 'Zachowano'
+                : saveStatus === 'error'
+                  ? 'Spróbuj ponownie'
+                  : 'Zachowaj analizę'}
+          </button>
+          <button type="button" onClick={onReset} className="report-action-button">
+            ← Nowa analiza
+          </button>
+        </div>
       </div>
 
       {/* ── Fetch debug ─────────────────────────────────────────────────────── */}
@@ -110,10 +147,14 @@ export function AnalysisReport({ result, onReset }: Props) {
           { id: 'seo-pack',  label: 'SEO Pack',   badge: null },
           { id: 'expansion', label: 'Content Expansion', badge: null },
           { id: 'checklist', label: 'Checklista', badge: issueCount > 0 ? String(issueCount) : null },
-        ] as const).map(tab => (
+        ] as const).map(tab => {
+          const premiumLocked = !hasFullSeoPack && (tab.id === 'seo-pack' || tab.id === 'expansion');
+          return (
           <button
             key={tab.id}
-            onClick={() => setMainTab(tab.id)}
+            onClick={() => !premiumLocked && setMainTab(tab.id)}
+            disabled={premiumLocked}
+            title={premiumLocked ? 'Pełny SEO Pack i rozbudowa treści są dostępne w Premium' : undefined}
             style={{
               display: 'flex', alignItems: 'center', gap: 5,
               padding: '7px 14px',
@@ -121,10 +162,13 @@ export function AnalysisReport({ result, onReset }: Props) {
               color: mainTab === tab.id ? 'white' : 'var(--ink-60)',
               border: '1px solid', borderColor: mainTab === tab.id ? 'var(--ink)' : 'var(--ink-10)',
               borderRadius: 7, fontSize: 13, fontFamily: 'var(--font-sans)',
-              cursor: 'pointer', transition: 'all 0.15s',
+              cursor: premiumLocked ? 'not-allowed' : 'pointer',
+              opacity: premiumLocked ? 0.72 : 1,
+              transition: 'all 0.15s',
             }}
           >
             {tab.label}
+            {premiumLocked && <span className="premium-mode-badge">Premium</span>}
             {tab.badge && (
               <span style={{
                 fontSize: 10, padding: '1px 5px', borderRadius: 10,
@@ -135,7 +179,8 @@ export function AnalysisReport({ result, onReset }: Props) {
               </span>
             )}
           </button>
-        ))}
+          );
+        })}
       </div>
 
       {/* ── Tab content ──────────────────────────────────────────────────────── */}
