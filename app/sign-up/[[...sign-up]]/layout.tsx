@@ -2,6 +2,9 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Rejestracja',
+  alternates: {
+    canonical: '/sign-up',
+  },
   robots: {
     index: false,
     follow: false,

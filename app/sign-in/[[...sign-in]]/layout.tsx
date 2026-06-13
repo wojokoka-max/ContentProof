@@ -2,6 +2,9 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'Logowanie',
+  alternates: {
+    canonical: '/sign-in',
+  },
   robots: {
     index: false,
     follow: false,
