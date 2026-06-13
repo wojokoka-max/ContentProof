@@ -145,6 +145,36 @@ function buildSummary(findings: Finding[]) {
   };
 }
 
+function attachReadyFaqToFindings(
+  categories: CategoryResult[],
+  faqText: string
+): CategoryResult[] {
+  if (!faqText.trim()) return categories;
+
+  const faqRules = new Set([
+    'faq.no-faq',
+    'faq.answer-too-short',
+    'faq.too-few-items',
+  ]);
+
+  return categories.map(category => {
+    if (category.category !== 'faq') return category;
+
+    return {
+      ...category,
+      findings: category.findings.map(finding => {
+        if (!faqRules.has(finding.ruleId)) return finding;
+
+        return {
+          ...finding,
+          recommendation: 'Skorzystaj z poniższych pytań i rozwiniętych odpowiedzi. Każda propozycja wynika z treści aktualnego artykułu.',
+          fixExample: faqText,
+        };
+      }),
+    };
+  });
+}
+
 // ─── Main Entry Point ─────────────────────────────────────────────────────────
 
 export function analyze(
@@ -171,9 +201,10 @@ export function analyze(
   categories = attachImpactPoints(categories);
 
   const scoreResult = calculateScore({ categories, wordCount: content.wordCount });
-  const allFindings = categories.flatMap(cat => cat.findings);
 
   const expansionPack = generateExpansionPack(content);
+  categories = attachReadyFaqToFindings(categories, expansionPack.faqText);
+  const allFindings = categories.flatMap(cat => cat.findings);
   const seoPack = generateSeoPack(content, expansionPack.faqSuggestions);
   const fixAll = buildFixAll(content, seoPack, expansionPack, scoreResult.overallScore, categories);
 

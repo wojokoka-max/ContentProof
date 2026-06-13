@@ -228,12 +228,29 @@ function faqEvidenceWords(text: string): string[] {
     .filter(word => word.length >= 4 && !stopWords.has(word));
 }
 
+function faqEvidenceKeys(text: string): Set<string> {
+  return new Set(faqEvidenceWords(text).map(word => word.slice(0, 5)));
+}
+
+function hasFaqEvidenceOverlap(first: string, second: string): boolean {
+  const firstKeys = faqEvidenceKeys(first);
+  const secondKeys = faqEvidenceKeys(second);
+  if (firstKeys.size === 0 || secondKeys.size === 0) return false;
+
+  let matches = 0;
+  for (const key of firstKeys) {
+    if (secondKeys.has(key)) matches++;
+  }
+
+  return matches >= 2 || (matches === 1 && Math.min(firstKeys.size, secondKeys.size) <= 4);
+}
+
 function findFaqSupportingSentence(
   content: StructuredContent,
   question: string,
   answer: string
 ): string | null {
-  const evidence = new Set(faqEvidenceWords(`${question} ${answer}`));
+  const evidence = faqEvidenceKeys(`${question} ${answer}`);
   if (evidence.size === 0) return null;
 
   const normalizedAnswer = cleanText(answer).toLowerCase();
@@ -249,15 +266,51 @@ function findFaqSupportingSentence(
     if (isImperativeFaqAnswer(sentence, content.language)) continue;
     if (/^(dodaj|krok|następnie|przygotowanie|składniki|wykonanie)\b/i.test(sentence)) continue;
 
-    const sentenceWords = faqEvidenceWords(sentence);
-    const matchedWords = sentenceWords.filter(word => evidence.has(word));
-    const hasStrongMatch = matchedWords.some(word => word.length >= 8);
+    const sentenceWords = faqEvidenceKeys(sentence);
+    const matchedWords = [...sentenceWords].filter(word => evidence.has(word));
     const score = matchedWords.length * 10 - Math.abs(sentence.length - 120) / 30;
-    if ((matchedWords.length < 2 && !hasStrongMatch) || (best && score <= best.score)) continue;
+    if (matchedWords.length < 1 || (best && score <= best.score)) continue;
     best = { sentence, score };
   }
 
   return best?.sentence ?? null;
+}
+
+function splitFaqAnswerAtConnector(answer: string): string | null {
+  const match = answer.match(
+    /^(.+?)(?:,\s+|\s+)(ale|jednak|ponieważ|dlatego|więc|także)\s+(.+)$/i
+  );
+  if (!match) return null;
+
+  const first = match[1].trim().replace(/[.!?…]+$/, '');
+  const connector = match[2].toLowerCase();
+  const rest = match[3].trim().replace(/^[,.;:\s]+/, '');
+  if (!first || !rest) return null;
+
+  const transition = connector === 'ale' || connector === 'jednak'
+    ? 'Jednak'
+    : connector === 'ponieważ'
+      ? 'Wynika to z tego, że'
+      : connector === 'dlatego' || connector === 'więc'
+        ? 'Dlatego'
+        : 'Ponadto';
+
+  return `${first}. ${transition} ${rest.charAt(0).toLowerCase()}${rest.slice(1)}`;
+}
+
+function connectFaqSentences(firstSentence: string, supportingSentence: string): string {
+  const support = supportingSentence.trim();
+  if (/^(ale|co więcej|dlatego|dzięki temu|jednak|ponadto|także|więc|w ten sposób)\b/i.test(support)) {
+    return `${firstSentence} ${support}`;
+  }
+
+  const transition = /\b(ale|jednak|mimo)\b/i.test(firstSentence)
+    ? 'Jednocześnie'
+    : /\b(ponieważ|gdyż|z powodu)\b/i.test(firstSentence)
+      ? 'Dlatego'
+      : 'Ponadto';
+
+  return `${firstSentence} ${transition}, ${support.charAt(0).toLowerCase()}${support.slice(1)}`;
 }
 
 function buildPublishableFaqAnswer(
@@ -274,14 +327,22 @@ function buildPublishableFaqAnswer(
     .filter(Boolean);
 
   if (sentences.length >= 2) {
-    return summarizeFaqAnswer(sentences.slice(0, 3).join(' '));
+    const summarized = summarizeFaqAnswer(sentences.slice(0, 3).join(' '));
+    if (summarized && hasNaturalFaqFlow(summarized)) return summarized;
   }
 
-  const firstSentence = /[.!?…]$/.test(cleaned) ? cleaned : `${cleaned}.`;
+  const connectedAnswer = sentences.length === 1
+    ? splitFaqAnswerAtConnector(cleaned)
+    : null;
+  const connectedSummary = connectedAnswer ? summarizeFaqAnswer(connectedAnswer) : null;
+  if (connectedSummary && hasNaturalFaqFlow(connectedSummary)) return connectedSummary;
+
+  const answerBase = connectedAnswer ?? cleaned;
+  const firstSentence = /[.!?…]$/.test(answerBase) ? answerBase : `${answerBase}.`;
   const supportingSentence = findFaqSupportingSentence(content, question, firstSentence);
   if (!supportingSentence) return null;
 
-  return summarizeFaqAnswer(`${firstSentence} ${supportingSentence}`);
+  return summarizeFaqAnswer(connectFaqSentences(firstSentence, supportingSentence));
 }
 
 function isImperativeFaqAnswer(answer: string, lang: 'pl' | 'en'): boolean {
@@ -293,7 +354,7 @@ function isImperativeFaqAnswer(answer: string, lang: 'pl' | 'en'): boolean {
   if (sentences.length === 0) return false;
 
   const imperativeWord = lang === 'pl'
-    ? /\b(dodaj|dopraw|gotuj|kliknij|odstaw|otwórz|pamiętaj|piecz|podgrzej|połącz|pokrój|porównaj|przelej|przełóż|przemieszaj|przygotuj|rozgrzej|rozłóż|schłódź|skróć|smaż|sprawdź|upewnij się|ugotuj|unikaj|ustaw|usuń|utrzyj|użyj|wlej|wymieszaj|wybierz|zblenduj|zacznij|zamroź|zastosuj|zmień|zrób)\b/i
+    ? /\b(dodaj|dopraw|gotuj|kliknij|odstaw|otwórz|pamiętaj|piecz|podgrzej|połącz|pokrój|porównaj|przelej|przełóż|przemieszaj|przygotuj|rozgrzej|rozłóż|schłódź|skróć|smaż|sprawdź|upewnij się|ugotuj|unikaj|ustaw|usuń|utrzyj|użyj|wlej|wymieszaj|wybierz|zblenduj|zacznij|zamroź|zastosuj|zmień|zrób)(?![a-ząćęłńóśźż])/i
     : /\b(add|bake|blend|boil|choose|click|combine|compare|cook|cool|cut|freeze|heat|mix|open|pour|prepare|remember|remove|roast|set|stir|use|wait|warm|whisk)\b/i;
 
   return sentences.some(sentence => imperativeWord.test(sentence));
@@ -366,6 +427,14 @@ function answerFromArticleSentences(content: StructuredContent, patterns: RegExp
     if (/^(dzięki temu|w ten sposób|dlatego|wtedy|z tego powodu)\b/i.test(sentence)) continue;
     if (isImperativeFaqAnswer(sentence, content.language)) continue;
 
+    const sourceParagraph = content.paragraphs.find(paragraph =>
+      cleanText(paragraph.text).replace(/\s+/g, ' ').includes(sentence)
+    );
+    if (sourceParagraph) {
+      const paragraphAnswer = summarizeFaqAnswer(sourceParagraph.text);
+      if (paragraphAnswer && hasNaturalFaqFlow(paragraphAnswer)) return paragraphAnswer;
+    }
+
     selected.push(sentence);
     const next = sentences[i + 1];
     if (
@@ -374,6 +443,7 @@ function answerFromArticleSentences(content: StructuredContent, patterns: RegExp
       !/^\d+\./.test(next) &&
       !isImperativeFaqAnswer(next, content.language) &&
       !/^(dzięki temu|w ten sposób|dlatego|wtedy|z tego powodu)\b/i.test(next) &&
+      hasFaqEvidenceOverlap(`${sentence} ${patterns.map(pattern => pattern.source).join(' ')}`, next) &&
       selected.join(' ').length < 180
     ) {
       selected.push(next);
@@ -439,7 +509,7 @@ function generateFaqFromArticleSentences(
     },
     {
       question: 'Czy trzeba całkowicie rezygnować ze słodyczy?',
-      patterns: [/pojedynczy deser/i, /ciągłe podjadanie/i, /po posiłku/i, /osobną przekąsk/i],
+      patterns: [/pojedynczy deser/i, /ciągłe podjadanie/i, /po posiłku/i, /osobną przekąsk/i, /nie trzeba usuwać/i],
     },
     {
       question: 'Co pomaga utrzymać sytość przy ograniczaniu cukru?',
@@ -690,13 +760,13 @@ function h2ToQuestion(h2: string, lang: 'pl' | 'en'): string | null {
     if (NON_QUESTION_SECTIONS_PL.test(t)) return null;
 
     // 1. Starts with question word → just append "?"
-    if (/^(jak |dlaczego |kiedy |gdzie |skąd |po co |ile |kto |czym |co |czy )/i.test(t))
+    if (/^(jak |dlaczego |kiedy |gdzie |skąd |po co |od czego |ile |kto |czym |co |czy )/i.test(t))
       return `${t}?`;
     if (/^z czym(?:\s|$)/i.test(t))
       return 'Z czym najlepiej podawać to danie?';
 
     // 2. Universal semantic patterns — work for ANY topic domain
-    if (/^(zalety|korzyści|plusy)/i.test(t))
+    if (/^(najważniejsze\s+)?(zalety|korzyści|plusy)/i.test(t))
       return `Jakie są ${lower}?`;
     if (/^(wady|minusy|ograniczenia|problemy z)/i.test(t))
       return `Jakie są ${lower}?`;
@@ -859,11 +929,8 @@ function generateFaqFromContent(content: StructuredContent): Array<{ question: s
   const sentenceFaq = generateFaqFromArticleSentences(content, h1);
   sentenceFaq.forEach(addQuestion);
 
-  // 4. Recipes need supplementary questions, never a copy of the main method.
-  generateRecipeFaqFromEvidence(content, h1).forEach(addQuestion);
-  generateRecipeProcessFaq(content, h1).forEach(addQuestion);
-
-  // 5. Generate from H2 headings, but answer only with nearby article content.
+  // 4. Generate from H2 headings, but answer only with nearby article content.
+  // Direct article sections are more precise than inferred supplementary questions.
   const h2s = content.headings.filter(h => h.level === 2).map(h => h.text);
 
   for (const h2 of h2s) {
@@ -884,6 +951,10 @@ function generateFaqFromContent(content: StructuredContent): Array<{ question: s
     addQuestion(item);
     if (questions.length >= 6) break;
   }
+
+  // 5. Recipes need supplementary questions only when direct sections are insufficient.
+  generateRecipeFaqFromEvidence(content, h1).forEach(addQuestion);
+  generateRecipeProcessFaq(content, h1).forEach(addQuestion);
 
   if (content.analysisMode === 'url' && questions.length < minimumGeneratedFaqCount) {
     const urlFallback = generateUrlFaqFallback(content, h1);

@@ -169,7 +169,9 @@ export function extractTextFaq(lines: string[], lang: 'pl' | 'en'): FaqItem[] {
   const faqHeadingIndex = lines.findIndex(line =>
     /^(faq|najczęstsze pytania|pytania i odpowiedzi)$/i.test(line.trim())
   );
-  let i = faqHeadingIndex >= 0 ? faqHeadingIndex + 1 : 0;
+  if (faqHeadingIndex < 0) return items;
+
+  let i = faqHeadingIndex + 1;
 
   while (i < lines.length) {
     const line = lines[i].trim();
