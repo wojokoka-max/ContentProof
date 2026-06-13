@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import type { AnalysisResult, FetchDebug, InputMode, MetaInput } from '@/lib/types';
 import type { SavedAnalysis } from '@/lib/history';
@@ -230,11 +231,11 @@ export default function Home() {
           <>
             <div className="animate-fade-up" style={{ marginBottom: 40 }}>
               <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px, 5vw, 44px)', fontWeight: 800, lineHeight: 1.1, letterSpacing: '-0.03em', margin: '0 0 12px' }}>
-                Sprawdź treść<br />
-                <span style={{ color: 'var(--ink-40)' }}>przed publikacją.</span>
+                Analiza SEO treści,<br />
+                <span style={{ color: 'var(--ink-40)' }}>URL i HTML.</span>
               </h1>
-              <p style={{ fontSize: 15, color: 'var(--ink-60)', maxWidth: 480, lineHeight: 1.6, margin: 0 }}>
-                Wklej HTML, tekst artykułu lub adres URL strony.
+              <p style={{ fontSize: 15, color: 'var(--ink-60)', maxWidth: 560, lineHeight: 1.6, margin: 0 }}>
+                ContentProof sprawdza szkice przed publikacją oraz artykuły już dostępne w internecie. Otrzymujesz ocenę, gotowe poprawki, meta dane i FAQ.
               </p>
             </div>
             <div className="animate-fade-up" style={{ animationDelay: '80ms' }}>
@@ -249,6 +250,7 @@ export default function Home() {
                 </div>
               )}
               <Features />
+              <ProductOverview />
             </div>
           </>
         )}
@@ -381,6 +383,49 @@ function Features() {
         </div>
       ))}
     </div>
+  );
+}
+
+function ProductOverview() {
+  return (
+    <section className="product-overview" aria-labelledby="product-overview-title">
+      <div className="product-overview-heading">
+        <h2 id="product-overview-title">Co sprawdza ContentProof?</h2>
+        <p>
+          Jedno narzędzie obsługuje trzy różne etapy pracy z treścią. Zakres analizy
+          dopasowuje się do materiału, który podajesz.
+        </p>
+      </div>
+
+      <div className="product-overview-grid">
+        <div>
+          <h3>Tekst i szkic</h3>
+          <p>
+            Analiza struktury, czytelności i tematu jeszcze przed dodaniem artykułu
+            do CMS. ContentProof proponuje również nagłówki, meta dane i FAQ.
+          </p>
+        </div>
+        <div>
+          <h3>Opublikowany URL</h3>
+          <p>
+            Kontrola gotowej strony wraz z tytułem, opisem, canonical, nagłówkami,
+            linkami, obrazami i danymi strukturalnymi.
+          </p>
+        </div>
+        <div>
+          <h3>Kod HTML</h3>
+          <p>
+            Sprawdzenie rzeczywistej struktury dokumentu i elementów SEO zapisanych
+            w kodzie, bez mieszania ich z samą treścią artykułu.
+          </p>
+        </div>
+      </div>
+
+      <div className="product-overview-footer">
+        <p>Tryb tekstowy jest dostępny bezpłatnie. Analiza URL i HTML należy do Premium.</p>
+        <Link href="/pricing" className="header-link">Porównaj plany</Link>
+      </div>
+    </section>
   );
 }
 
