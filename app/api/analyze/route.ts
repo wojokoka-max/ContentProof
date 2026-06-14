@@ -138,6 +138,7 @@ export async function POST(req: NextRequest) {
             plan: reservation.plan,
             remaining: reservation.remaining,
             limit: reservation.limit,
+            purchasedCredits: reservation.purchasedCredits,
           },
         }, undefined, guestId);
       }
@@ -161,6 +162,7 @@ export async function POST(req: NextRequest) {
         plan: reservation.plan,
         remaining: reservation.remaining,
         limit: reservation.limit,
+        purchasedCredits: reservation.purchasedCredits,
       },
     }, undefined, guestId);
 

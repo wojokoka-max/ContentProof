@@ -8,6 +8,7 @@ export interface UsageStatus {
   plan: AccessPlan;
   remaining: number | null;
   limit: number | null;
+  purchasedCredits: number;
   canUseAdvancedModes: boolean;
   canSaveHistory: boolean;
   canExport: boolean;
@@ -23,6 +24,7 @@ interface QuotaRow {
   allowed: boolean;
   remaining: number | null;
   limit_value: number | null;
+  purchased_remaining: number | null;
   reason: string | null;
 }
 
@@ -60,16 +62,24 @@ export async function getUsageStatus(
   const features = planFeatures(plan);
 
   if (plan === 'admin') {
-    return { ...features, plan, remaining: null, limit: null };
+    return { ...features, plan, remaining: null, limit: null, purchasedCredits: 0 };
   }
 
-  const fallbackLimit = plan === 'premium' ? 30 : plan === 'free' ? 3 : 1;
+  const fallbackLimit = plan === 'premium'
+    ? (access.billingPeriod === 'yearly' ? 200 : 30)
+    : plan === 'free' ? 5 : 1;
   if (!isDatabaseConfigured()) {
-    return { ...features, plan, remaining: fallbackLimit, limit: fallbackLimit };
+    return {
+      ...features,
+      plan,
+      remaining: fallbackLimit,
+      limit: fallbackLimit,
+      purchasedCredits: 0,
+    };
   }
 
   if (plan === 'guest' && !guestId) {
-    return { ...features, plan, remaining: 1, limit: 1 };
+    return { ...features, plan, remaining: 1, limit: 1, purchasedCredits: 0 };
   }
 
   const subjectId = access.userId ?? `guest:${guestId}`;
@@ -83,27 +93,28 @@ export async function getUsageStatus(
 
   if (plan === 'guest') {
     const bucket = rows.find(row => row.bucket_key === 'guest:lifetime');
-    return { ...features, plan, remaining: Math.max(1 - (bucket?.used ?? 0), 0), limit: 1 };
+    return {
+      ...features,
+      plan,
+      remaining: Math.max(1 - (bucket?.used ?? 0), 0),
+      limit: 1,
+      purchasedCredits: 0,
+    };
   }
 
   const monthKey = new Date().toISOString().slice(0, 7);
-  if (plan === 'premium') {
-    const bucket = rows.find(row => row.bucket_key === `premium:${monthKey}`);
-    return { ...features, plan, remaining: Math.max(30 - (bucket?.used ?? 0), 0), limit: 30 };
-  }
-
-  const starter = rows.find(row => row.bucket_key === 'free:starter');
-  if (!starter || starter.used < 3) {
-    return { ...features, plan, remaining: Math.max(3 - (starter?.used ?? 0), 0), limit: 3 };
-  }
-
-  const starterMonth = starter.created_at.slice(0, 7);
-  if (monthKey <= starterMonth) {
-    return { ...features, plan, remaining: 0, limit: 3 };
-  }
-
-  const monthly = rows.find(row => row.bucket_key === `free:${monthKey}`);
-  return { ...features, plan, remaining: Math.max(1 - (monthly?.used ?? 0), 0), limit: 1 };
+  const limit = plan === 'premium'
+    ? (access.billingPeriod === 'yearly' ? 200 : 30)
+    : 5;
+  const monthly = rows.find(row => row.bucket_key === `${plan}:${monthKey}`);
+  const purchased = rows.find(row => row.bucket_key === 'credits:purchased');
+  return {
+    ...features,
+    plan,
+    remaining: Math.max(limit - (monthly?.used ?? 0), 0),
+    limit,
+    purchasedCredits: Math.max((purchased?.limit_value ?? 0) - (purchased?.used ?? 0), 0),
+  };
 }
 
 export async function reserveQuota(
@@ -124,6 +135,7 @@ export async function reserveQuota(
       allowed: false,
       remaining: null,
       limit: null,
+      purchasedCredits: 0,
       reason: 'premium_mode',
     };
   }
@@ -136,6 +148,7 @@ export async function reserveQuota(
       allowed: true,
       remaining: null,
       limit: null,
+      purchasedCredits: 0,
       reason: null,
     };
   }
@@ -148,6 +161,7 @@ export async function reserveQuota(
       allowed: false,
       remaining: null,
       limit: null,
+      purchasedCredits: 0,
       reason: 'database_unavailable',
     };
   }
@@ -158,7 +172,8 @@ export async function reserveQuota(
       ${subjectId},
       ${analysisId},
       ${plan},
-      ${mode}
+      ${mode},
+      ${access.billingPeriod}
     )
   ` as QuotaRow[];
   const row = rows[0];
@@ -170,6 +185,7 @@ export async function reserveQuota(
     allowed: Boolean(row?.allowed),
     remaining: row?.remaining ?? 0,
     limit: row?.limit_value ?? null,
+    purchasedCredits: row?.purchased_remaining ?? 0,
     reason: row?.reason ?? 'limit_reached',
   };
 }
@@ -194,10 +210,10 @@ export function quotaErrorMessage(reason: string | null, plan: AccessPlan): stri
     return 'Limity analiz nie są jeszcze skonfigurowane.';
   }
   if (plan === 'guest') {
-    return 'Bezpłatna analiza próbna została wykorzystana. Załóż konto, aby otrzymać 3 pełne analizy tekstu.';
+    return 'Bezpłatna analiza próbna została wykorzystana. Załóż konto, aby otrzymać 5 kredytów miesięcznie.';
   }
   if (plan === 'free') {
-    return 'Twój bezpłatny limit został wykorzystany. Kolejna analiza będzie dostępna w następnym miesiącu albo od razu w Premium.';
+    return 'Wykorzystano 5 darmowych kredytów. Możesz przejść na Premium albo dokupić 5 kredytów za 9 zł.';
   }
-  return 'Miesięczny limit analiz został wykorzystany.';
+  return 'Miesięczny limit kredytów został wykorzystany. Możesz dokupić 5 kredytów za 9 zł.';
 }

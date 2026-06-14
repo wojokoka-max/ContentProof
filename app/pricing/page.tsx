@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { AccountState } from '@/components/AccountControls';
 
-type CheckoutState = 'idle' | 'monthly' | 'yearly' | 'portal';
+type CheckoutState = 'idle' | 'monthly' | 'yearly' | 'credits' | 'portal';
 
 const EMPTY_ACCOUNT: AccountState = {
   configured: false,
@@ -15,6 +15,7 @@ const EMPTY_ACCOUNT: AccountState = {
   plan: 'guest',
   remaining: 1,
   limit: 1,
+  purchasedCredits: 0,
   canUseAdvancedModes: false,
   canSaveHistory: false,
   canExport: false,
@@ -76,6 +77,24 @@ export default function PricingPage() {
     }
   }
 
+  async function buyCredits() {
+    setCheckoutState('credits');
+    setError('');
+    try {
+      const response = await fetch('/api/billing/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ purchase: 'credits_5' }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.url) throw new Error(data.error ?? 'Nie udało się rozpocząć płatności.');
+      window.location.href = data.url;
+    } catch (checkoutError) {
+      setError(checkoutError instanceof Error ? checkoutError.message : 'Nie udało się rozpocząć płatności.');
+      setCheckoutState('idle');
+    }
+  }
+
   async function openPortal() {
     setCheckoutState('portal');
     setError('');
@@ -123,8 +142,8 @@ export default function PricingPage() {
           note="Idealne do przetestowania narzędzia."
           features={[
             '1 analiza bez konta',
-            '3 analizy tekstu po rejestracji',
-            'Później 1 analiza miesięcznie',
+            '5 kredytów miesięcznie po rejestracji',
+            '1 analiza tekstu = 1 kredyt',
             'Bez historii i eksportu PDF',
           ]}
           action={account.signedIn ? 'Twój plan podstawowy' : 'Załóż konto'}
@@ -138,7 +157,8 @@ export default function PricingPage() {
           suffix="/ mies."
           note="Najlepszy plan dla większości użytkowników."
           features={[
-            '30 analiz miesięcznie',
+            '30 kredytów miesięcznie',
+            '1 analiza = 1 kredyt',
             'Analiza tekstu, URL i HTML',
             'Historia analiz i zapis wyników',
             'Pełny SEO Pack i eksport PDF',
@@ -158,7 +178,7 @@ export default function PricingPage() {
           featured
           features={[
             'Wszystko z planu Premium miesięcznego',
-            '30 analiz w każdym miesiącu',
+            '200 kredytów w każdym miesiącu',
             'Ta sama pełna funkcjonalność',
             'Około 32% taniej niż miesięcznie',
           ]}
@@ -168,6 +188,28 @@ export default function PricingPage() {
           disabled={loading || account.isAdmin || (!account.billingConfigured && account.signedIn)}
           busy={checkoutState === 'yearly' || checkoutState === 'portal'}
         />
+      </section>
+
+      <section className="pricing-credit-pack" aria-label="Dodatkowe kredyty">
+        <div>
+          <h2>Potrzebujesz kilku dodatkowych analiz?</h2>
+          <p>
+            Dokup 5 kredytów za 9 zł. Nie wygasają i zostaną użyte dopiero po
+            wykorzystaniu miesięcznej puli.
+          </p>
+        </div>
+        {account.signedIn ? (
+          <button
+            type="button"
+            className="pricing-action"
+            onClick={buyCredits}
+            disabled={loading || account.isAdmin || !account.billingConfigured || checkoutState !== 'idle'}
+          >
+            {checkoutState === 'credits' ? 'Otwieranie...' : 'Dokup 5 kredytów — 9 zł'}
+          </button>
+        ) : (
+          <Link href="/sign-in" className="pricing-action">Zaloguj się, aby dokupić</Link>
+        )}
       </section>
 
       <p className="pricing-footnote">

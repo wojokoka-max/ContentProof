@@ -22,3 +22,9 @@ export function getStripePrice(period: 'monthly' | 'yearly'): string {
   if (!price) throw new Error(`Stripe price for ${period} is not configured.`);
   return price;
 }
+
+export function getCreditPackPrice(): string {
+  const price = process.env.STRIPE_PRICE_CREDITS_5;
+  if (!price) throw new Error('Stripe price for 5 credits is not configured.');
+  return price;
+}

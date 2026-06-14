@@ -35,7 +35,8 @@ Historia analiz używa Clerk do logowania i Neon Postgres do przechowywania dany
 2. Uruchom migrację `db/migrations/001_analysis_history.sql` w konsoli SQL bazy Neon.
 3. Uruchom migrację `db/migrations/002_analysis_limits.sql`, aby włączyć limity planów.
 4. Uruchom migrację `db/migrations/003_billing_subscriptions.sql`, aby przygotować płatności.
-5. Ustaw użytkownikowi Clerk `publicMetadata.plan` na `premium`. W testach można też wpisać identyfikator użytkownika do `PREMIUM_USER_IDS`.
+5. Uruchom kolejno migracje `004`, `005` i `006_credit_limits_and_purchases.sql`.
+6. Ustaw użytkownikowi Clerk `publicMetadata.plan` na `premium`. W testach można też wpisać identyfikator użytkownika do `PREMIUM_USER_IDS`.
 
 Analizy nie zapisują się automatycznie. Użytkownik Premium zapisuje konkretny wynik przyciskiem „Zachowaj analizę”.
 
@@ -50,9 +51,12 @@ Panel administratora nie zmienia wyników analizatora. Daje wyłącznie dostęp 
 ## Limity planów
 
 - Gość: 1 pełna analiza tekstu.
-- Free: 3 analizy tekstu na start, później 1 analiza tekstu miesięcznie.
-- Premium: 30 analiz miesięcznie, tryby Tekst, HTML i URL, historia oraz eksport PDF.
+- Free: 5 kredytów miesięcznie na analizy tekstu.
+- Premium miesięczny: 30 kredytów miesięcznie, tryby Tekst, HTML i URL, historia oraz eksport PDF.
+- Premium roczny: 200 kredytów miesięcznie i pełna funkcjonalność Premium.
 - Administrator: wszystkie funkcje bez limitu.
+
+Jedna analiza zużywa jeden kredyt. Zalogowany użytkownik każdego planu może dokupić 5 niewygasających kredytów za 9 zł. Najpierw wykorzystywana jest pula miesięczna, a następnie kredyty dokupione.
 
 Nieudana analiza ani błąd pobierania adresu URL nie zużywa limitu.
 
@@ -67,6 +71,7 @@ Wymagane zmienne:
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_PRICE_MONTHLY`
 - `STRIPE_PRICE_YEARLY`
+- `STRIPE_PRICE_CREDITS_5`
 
 Webhook Stripe powinien wskazywać na `/api/billing/webhook` i obsługiwać:
 

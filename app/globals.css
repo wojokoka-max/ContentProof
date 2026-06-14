@@ -674,6 +674,35 @@ body {
   font-size: 12px;
 }
 
+.pricing-credit-pack {
+  margin-top: 16px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border: 1px solid var(--ink-10);
+  border-radius: 8px;
+  background: var(--white);
+}
+
+.pricing-credit-pack h2 {
+  margin: 0 0 5px;
+  font-family: var(--font-display);
+  font-size: 15px;
+}
+
+.pricing-credit-pack p {
+  margin: 0;
+  color: var(--ink-60);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.pricing-credit-pack .pricing-action {
+  flex: 0 0 auto;
+}
+
 @media (max-width: 640px) {
   .app-header {
     padding: 0 12px;
@@ -731,6 +760,11 @@ body {
 
   .pricing-grid {
     grid-template-columns: 1fr;
+  }
+
+  .pricing-credit-pack {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .pricing-card p {

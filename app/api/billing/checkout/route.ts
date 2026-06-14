@@ -3,7 +3,7 @@ import { currentUser } from '@clerk/nextjs/server';
 import { getAccountAccess } from '@/lib/auth';
 import { getDatabase, isDatabaseConfigured } from '@/lib/db';
 import { isBillingConfigured } from '@/lib/billing';
-import { getStripe, getStripePrice } from '@/lib/stripe';
+import { getCreditPackPrice, getStripe, getStripePrice } from '@/lib/stripe';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,17 +15,30 @@ export async function POST(request: NextRequest) {
   if (access.isAdmin) {
     return NextResponse.json({ error: 'Konto administratora ma już pełny dostęp.' }, { status: 400 });
   }
-  if (access.subscriptionStatus === 'active' || access.subscriptionStatus === 'trialing') {
-    return NextResponse.json({ error: 'Masz już aktywną subskrypcję Premium.' }, { status: 409 });
-  }
   if (!isBillingConfigured() || !isDatabaseConfigured()) {
     return NextResponse.json({ error: 'Płatności nie są jeszcze skonfigurowane.' }, { status: 503 });
   }
 
-  const body = await request.json().catch(() => null) as { period?: unknown } | null;
+  const body = await request.json().catch(() => null) as {
+    period?: unknown;
+    purchase?: unknown;
+  } | null;
+  const creditPurchase = body?.purchase === 'credits_5';
   const period = body?.period === 'yearly' ? 'yearly' : body?.period === 'monthly' ? 'monthly' : null;
-  if (!period) {
+  if (!creditPurchase && !period) {
     return NextResponse.json({ error: 'Wybierz plan miesięczny albo roczny.' }, { status: 400 });
+  }
+  if (
+    !creditPurchase &&
+    (access.subscriptionStatus === 'active' || access.subscriptionStatus === 'trialing')
+  ) {
+    return NextResponse.json({ error: 'Masz już aktywną subskrypcję Premium.' }, { status: 409 });
+  }
+  if (creditPurchase && !process.env.STRIPE_PRICE_CREDITS_5) {
+    return NextResponse.json(
+      { error: 'Pakiet dodatkowych kredytów nie jest jeszcze skonfigurowany.' },
+      { status: 503 }
+    );
   }
 
   const sql = getDatabase();
@@ -57,24 +70,48 @@ export async function POST(request: NextRequest) {
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
+  if (creditPurchase) {
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      locale: 'pl',
+      customer: customerId,
+      client_reference_id: access.userId,
+      line_items: [{ price: getCreditPackPrice(), quantity: 1 }],
+      allow_promotion_codes: true,
+      success_url: `${appUrl}/pricing?credits=success`,
+      cancel_url: `${appUrl}/pricing?credits=cancelled`,
+      metadata: {
+        ownerId: access.userId,
+        purchaseType: 'credits_5',
+        credits: '5',
+      },
+    });
+
+    if (!session.url) {
+      return NextResponse.json({ error: 'Stripe nie zwrócił adresu płatności.' }, { status: 502 });
+    }
+
+    return NextResponse.json({ url: session.url }, { headers: { 'Cache-Control': 'no-store' } });
+  }
+
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
     locale: 'pl',
     customer: customerId,
     client_reference_id: access.userId,
-    line_items: [{ price: getStripePrice(period), quantity: 1 }],
+    line_items: [{ price: getStripePrice(period!), quantity: 1 }],
     allow_promotion_codes: true,
     billing_address_collection: 'auto',
     success_url: `${appUrl}/pricing?checkout=success`,
     cancel_url: `${appUrl}/pricing?checkout=cancelled`,
     metadata: {
       ownerId: access.userId,
-      billingPeriod: period,
+      billingPeriod: period!,
     },
     subscription_data: {
       metadata: {
         ownerId: access.userId,
-        billingPeriod: period,
+        billingPeriod: period!,
       },
     },
   });

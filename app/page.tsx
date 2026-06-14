@@ -28,6 +28,7 @@ export default function Home() {
     plan: 'guest',
     remaining: 1,
     limit: 1,
+    purchasedCredits: 0,
     canUseAdvancedModes: false,
     canSaveHistory: false,
     canExport: false,
@@ -62,6 +63,7 @@ export default function Home() {
           plan: data.plan ?? 'guest',
           remaining: typeof data.remaining === 'number' ? data.remaining : null,
           limit: typeof data.limit === 'number' ? data.limit : null,
+          purchasedCredits: typeof data.purchasedCredits === 'number' ? data.purchasedCredits : 0,
           canUseAdvancedModes: Boolean(data.canUseAdvancedModes),
           canSaveHistory: Boolean(data.canSaveHistory),
           canExport: Boolean(data.canExport),
@@ -124,6 +126,9 @@ export default function Home() {
           plan: data.usage.plan ?? current.plan,
           remaining: typeof data.usage.remaining === 'number' ? data.usage.remaining : null,
           limit: typeof data.usage.limit === 'number' ? data.usage.limit : null,
+          purchasedCredits: typeof data.usage.purchasedCredits === 'number'
+            ? data.usage.purchasedCredits
+            : current.purchasedCredits,
         }));
       }
     } catch (err) {

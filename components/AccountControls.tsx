@@ -12,6 +12,7 @@ export interface AccountState {
   plan: 'guest' | 'free' | 'premium' | 'admin';
   remaining: number | null;
   limit: number | null;
+  purchasedCredits: number;
   canUseAdvancedModes: boolean;
   canSaveHistory: boolean;
   canExport: boolean;
@@ -88,8 +89,9 @@ function UsageBadge({ account }: { account: AccountState }) {
   }
 
   return (
-    <span className="usage-badge" title="Pozostałe analizy w bieżącym pakiecie">
+    <span className="usage-badge" title="Pozostałe kredyty w bieżącym miesiącu">
       {account.remaining}/{account.limit}
+      {account.purchasedCredits > 0 ? ` + ${account.purchasedCredits}` : ''}
     </span>
   );
 }
