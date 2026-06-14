@@ -231,9 +231,12 @@ export default function Home() {
           <>
             <div className="animate-fade-up" style={{ marginBottom: 40 }}>
               <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px, 5vw, 44px)', fontWeight: 800, lineHeight: 1.1, letterSpacing: '-0.03em', margin: '0 0 12px' }}>
-                Analiza SEO treści,<br />
-                <span style={{ color: 'var(--ink-40)' }}>URL i HTML.</span>
+                Sprawdź treść<br />
+                <span style={{ color: 'var(--ink-40)' }}>przed publikacją.</span>
               </h1>
+              <p style={{ fontSize: 18, color: 'var(--ink)', fontWeight: 650, lineHeight: 1.45, margin: '0 0 8px' }}>
+                Analiza SEO treści, URL i HTML.
+              </p>
               <p style={{ fontSize: 15, color: 'var(--ink-60)', maxWidth: 560, lineHeight: 1.6, margin: 0 }}>
                 ContentProof sprawdza szkice przed publikacją oraz artykuły już dostępne w internecie. Otrzymujesz ocenę, gotowe poprawki, meta dane i FAQ.
               </p>
