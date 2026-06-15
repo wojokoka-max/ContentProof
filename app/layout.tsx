@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { ClerkProvider } from '@clerk/nextjs';
+import { SiteFooter } from '@/components/SiteFooter';
 import './globals.css';
 
 const SITE_URL = 'https://www.contentproof.pl';
@@ -56,6 +57,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         '@id': `${STUDIO_URL}/#organization`,
         name: 'NextDoor Studio',
         url: STUDIO_URL,
+        email: 'kontakt@nextdoorstudio.pl',
+        contactPoint: {
+          '@type': 'ContactPoint',
+          email: 'kontakt@nextdoorstudio.pl',
+          contactType: 'customer support',
+          availableLanguage: 'Polish',
+        },
         owns: {
           '@id': `${SITE_URL}/#software`,
         },
@@ -115,7 +123,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="min-h-screen bg-white">
-        {children}
+        <div className="site-shell">
+          <div className="site-content">{children}</div>
+          <SiteFooter />
+        </div>
       </body>
     </html>
   );
