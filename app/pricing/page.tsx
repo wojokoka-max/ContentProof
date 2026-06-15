@@ -5,6 +5,11 @@ import { useEffect, useState } from 'react';
 import type { AccountState } from '@/components/AccountControls';
 
 type CheckoutState = 'idle' | 'monthly' | 'yearly' | 'credits' | 'portal';
+type PurchaseNotice =
+  | { kind: 'none' }
+  | { kind: 'pending'; message: string }
+  | { kind: 'success'; message: string }
+  | { kind: 'cancelled'; message: string };
 
 const EMPTY_ACCOUNT: AccountState = {
   configured: false,
@@ -31,22 +36,11 @@ export default function PricingPage() {
   const [loading, setLoading] = useState(true);
   const [checkoutState, setCheckoutState] = useState<CheckoutState>('idle');
   const [error, setError] = useState('');
+  const [purchaseNotice, setPurchaseNotice] = useState<PurchaseNotice>({ kind: 'none' });
 
   useEffect(() => {
     let active = true;
-    fetch('/api/account', { cache: 'no-store' })
-      .then(response => response.json())
-      .then(data => {
-        if (!active) return;
-        setAccount({
-          ...EMPTY_ACCOUNT,
-          ...data,
-          signedIn: Boolean(data.signedIn),
-          isPremium: Boolean(data.isPremium),
-          isAdmin: Boolean(data.isAdmin),
-          billingConfigured: Boolean(data.billingConfigured),
-        });
-      })
+    loadAccount()
       .catch(() => {
         if (active) setError('Nie udało się pobrać informacji o koncie.');
       })
@@ -57,6 +51,50 @@ export default function PricingPage() {
     return () => {
       active = false;
     };
+
+    async function loadAccount() {
+      const response = await fetch('/api/account', { cache: 'no-store' });
+      const data = await response.json();
+      if (!active) return;
+      setAccount({
+        ...EMPTY_ACCOUNT,
+        ...data,
+        signedIn: Boolean(data.signedIn),
+        isPremium: Boolean(data.isPremium),
+        isAdmin: Boolean(data.isAdmin),
+        billingConfigured: Boolean(data.billingConfigured),
+      });
+
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('credits') === 'cancelled') {
+        setPurchaseNotice({ kind: 'cancelled', message: 'Zakup kredytów został anulowany.' });
+        return;
+      }
+
+      const sessionId = params.get('session_id');
+      if (params.get('credits') !== 'success' || !sessionId || !data.signedIn) return;
+
+      setPurchaseNotice({ kind: 'pending', message: 'Potwierdzamy płatność i dodajemy kredyty...' });
+      const confirmation = await confirmCreditPurchase(sessionId);
+      if (!active) return;
+
+      if (confirmation.status === 'confirmed') {
+        setAccount(current => ({
+          ...current,
+          purchasedCredits: confirmation.purchasedCredits ?? current.purchasedCredits,
+        }));
+        setPurchaseNotice({
+          kind: 'success',
+          message: `Płatność potwierdzona. Dodano 5 kredytów. Masz teraz ${confirmation.purchasedCredits ?? 5} dodatkowych kredytów.`,
+        });
+        window.history.replaceState({}, '', '/pricing');
+      } else {
+        setPurchaseNotice({
+          kind: 'pending',
+          message: 'Płatność została przyjęta. Kredyty pojawią się na koncie za chwilę.',
+        });
+      }
+    }
   }, []);
 
   async function startCheckout(period: 'monthly' | 'yearly') {
@@ -125,6 +163,16 @@ export default function PricingPage() {
       </header>
 
       {error && <div className="pricing-message pricing-error">{error}</div>}
+      {purchaseNotice.kind !== 'none' && (
+        <div
+          className={purchaseNotice.kind === 'cancelled'
+            ? 'pricing-message pricing-neutral'
+            : 'pricing-message'}
+          role="status"
+        >
+          {purchaseNotice.message}
+        </div>
+      )}
       {hasStripeSubscription && (
         <div className="pricing-message">
           Premium jest aktywne
@@ -227,6 +275,22 @@ async function readJsonResponse(response: Response): Promise<{ url?: string; err
   } catch {
     return {};
   }
+}
+
+async function confirmCreditPurchase(sessionId: string): Promise<{
+  status?: 'confirmed' | 'pending';
+  purchasedCredits?: number;
+}> {
+  const response = await fetch('/api/billing/confirm', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId }),
+    cache: 'no-store',
+  });
+  return readJsonResponse(response) as {
+    status?: 'confirmed' | 'pending';
+    purchasedCredits?: number;
+  };
 }
 
 interface PlanCardProps {

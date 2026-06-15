@@ -103,7 +103,7 @@ async function createCheckout(request: NextRequest) {
       client_reference_id: access.userId,
       line_items: [{ price: getCreditPackPrice(), quantity: 1 }],
       allow_promotion_codes: true,
-      success_url: `${appUrl}/pricing?credits=success`,
+      success_url: `${appUrl}/pricing?credits=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/pricing?credits=cancelled`,
       metadata: {
         ownerId: access.userId,
