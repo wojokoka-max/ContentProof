@@ -203,7 +203,7 @@ export default function PricingPage() {
             type="button"
             className="pricing-action"
             onClick={buyCredits}
-            disabled={loading || account.isAdmin || !account.billingConfigured || checkoutState !== 'idle'}
+            disabled={loading || !account.billingConfigured || checkoutState !== 'idle'}
           >
             {checkoutState === 'credits' ? 'Otwieranie...' : 'Dokup 5 kredytów — 9 zł'}
           </button>

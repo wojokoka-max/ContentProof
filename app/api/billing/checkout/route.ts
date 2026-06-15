@@ -12,9 +12,6 @@ export async function POST(request: NextRequest) {
   if (!access.signedIn || !access.userId) {
     return NextResponse.json({ error: 'Zaloguj się, aby wybrać Premium.' }, { status: 401 });
   }
-  if (access.isAdmin) {
-    return NextResponse.json({ error: 'Konto administratora ma już pełny dostęp.' }, { status: 400 });
-  }
   if (!isBillingConfigured() || !isDatabaseConfigured()) {
     return NextResponse.json({ error: 'Płatności nie są jeszcze skonfigurowane.' }, { status: 503 });
   }
@@ -27,6 +24,9 @@ export async function POST(request: NextRequest) {
   const period = body?.period === 'yearly' ? 'yearly' : body?.period === 'monthly' ? 'monthly' : null;
   if (!creditPurchase && !period) {
     return NextResponse.json({ error: 'Wybierz plan miesięczny albo roczny.' }, { status: 400 });
+  }
+  if (access.isAdmin && !creditPurchase) {
+    return NextResponse.json({ error: 'Konto administratora ma już pełny dostęp.' }, { status: 400 });
   }
   if (
     !creditPurchase &&
