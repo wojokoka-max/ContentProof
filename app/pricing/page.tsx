@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { AccountState } from '@/components/AccountControls';
 
-type CheckoutState = 'idle' | 'monthly' | 'yearly' | 'credits' | 'portal';
+type CheckoutState = 'idle' | 'monthly' | 'yearly' | 'credits' | 'portal' | 'cancel';
 type PurchaseNotice =
   | { kind: 'none' }
   | { kind: 'pending'; message: string }
@@ -147,6 +147,37 @@ export default function PricingPage() {
     }
   }
 
+  async function cancelSubscription() {
+    const confirmed = window.confirm(
+      'Anulować automatyczne odnowienie? Premium pozostanie aktywne do końca opłaconego okresu.'
+    );
+    if (!confirmed) return;
+
+    setCheckoutState('cancel');
+    setError('');
+    try {
+      const response = await fetch('/api/billing/cancel', { method: 'POST' });
+      const data = await readJsonResponse(response);
+      if (!response.ok) {
+        throw new Error(data.error ?? 'Nie udało się anulować odnowienia.');
+      }
+
+      setAccount(current => ({ ...current, cancelAtPeriodEnd: true }));
+      setPurchaseNotice({
+        kind: 'success',
+        message: account.currentPeriodEnd
+          ? `Odnowienie zostało anulowane. Premium pozostaje aktywne do ${new Date(account.currentPeriodEnd).toLocaleDateString('pl-PL')}.`
+          : 'Odnowienie zostało anulowane. Premium pozostaje aktywne do końca opłaconego okresu.',
+      });
+    } catch (cancelError) {
+      setError(cancelError instanceof Error
+        ? cancelError.message
+        : 'Nie udało się anulować odnowienia.');
+    } finally {
+      setCheckoutState('idle');
+    }
+  }
+
   const hasStripeSubscription = account.subscriptionStatus === 'active'
     || account.subscriptionStatus === 'trialing';
 
@@ -174,12 +205,24 @@ export default function PricingPage() {
         </div>
       )}
       {hasStripeSubscription && (
-        <div className="pricing-message">
-          Premium jest aktywne
-          {account.currentPeriodEnd
-            ? ` do ${new Date(account.currentPeriodEnd).toLocaleDateString('pl-PL')}`
-            : ''}.
-          {account.cancelAtPeriodEnd ? ' Subskrypcja nie odnowi się automatycznie.' : ''}
+        <div className="pricing-message pricing-subscription-status">
+          <span>
+            Premium jest aktywne
+            {account.currentPeriodEnd
+              ? ` do ${new Date(account.currentPeriodEnd).toLocaleDateString('pl-PL')}`
+              : ''}.
+            {account.cancelAtPeriodEnd ? ' Subskrypcja nie odnowi się automatycznie.' : ''}
+          </span>
+          {!account.cancelAtPeriodEnd && (
+            <button
+              type="button"
+              className="pricing-cancel-action"
+              onClick={cancelSubscription}
+              disabled={checkoutState !== 'idle'}
+            >
+              {checkoutState === 'cancel' ? 'Anulowanie...' : 'Anuluj odnowienie'}
+            </button>
+          )}
         </div>
       )}
 

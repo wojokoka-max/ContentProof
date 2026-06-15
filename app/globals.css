@@ -675,6 +675,30 @@ body {
   color: var(--ink-60);
 }
 
+.pricing-subscription-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.pricing-cancel-action {
+  flex: 0 0 auto;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.pricing-cancel-action:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
 .pricing-footnote {
   margin: 24px 0 0;
   font-size: 12px;
@@ -770,6 +794,11 @@ body {
 
   .pricing-credit-pack {
     align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pricing-subscription-status {
+    align-items: flex-start;
     flex-direction: column;
   }
 

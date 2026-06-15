@@ -10,6 +10,7 @@ export interface BillingAccess {
   cancelAtPeriodEnd: boolean;
   currentPeriodEnd: string | null;
   stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
 }
 
 interface BillingRow {
@@ -18,6 +19,7 @@ interface BillingRow {
   cancelAtPeriodEnd: boolean;
   currentPeriodEnd: string | null;
   stripeCustomerId: string;
+  stripeSubscriptionId: string;
 }
 
 const ACTIVE_SUBSCRIPTION_STATUSES = ['active', 'trialing'];
@@ -43,7 +45,8 @@ export async function getBillingAccess(ownerId: string): Promise<BillingAccess> 
       status,
       cancel_at_period_end AS "cancelAtPeriodEnd",
       current_period_end AS "currentPeriodEnd",
-      stripe_customer_id AS "stripeCustomerId"
+      stripe_customer_id AS "stripeCustomerId",
+      stripe_subscription_id AS "stripeSubscriptionId"
     FROM billing_subscriptions
     WHERE owner_id = ${ownerId}
       AND status IN ('active', 'trialing')
@@ -63,6 +66,7 @@ export async function getBillingAccess(ownerId: string): Promise<BillingAccess> 
     cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
     currentPeriodEnd: subscription.currentPeriodEnd,
     stripeCustomerId: subscription.stripeCustomerId,
+    stripeSubscriptionId: subscription.stripeSubscriptionId,
   };
 }
 
@@ -75,5 +79,6 @@ function emptyBillingAccess(configured: boolean): BillingAccess {
     cancelAtPeriodEnd: false,
     currentPeriodEnd: null,
     stripeCustomerId: null,
+    stripeSubscriptionId: null,
   };
 }
