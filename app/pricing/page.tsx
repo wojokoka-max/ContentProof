@@ -68,7 +68,7 @@ export default function PricingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ period }),
       });
-      const data = await response.json();
+      const data = await readJsonResponse(response);
       if (!response.ok || !data.url) throw new Error(data.error ?? 'Nie udało się rozpocząć płatności.');
       window.location.href = data.url;
     } catch (checkoutError) {
@@ -86,7 +86,7 @@ export default function PricingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ purchase: 'credits_5' }),
       });
-      const data = await response.json();
+      const data = await readJsonResponse(response);
       if (!response.ok || !data.url) throw new Error(data.error ?? 'Nie udało się rozpocząć płatności.');
       window.location.href = data.url;
     } catch (checkoutError) {
@@ -100,7 +100,7 @@ export default function PricingPage() {
     setError('');
     try {
       const response = await fetch('/api/billing/portal', { method: 'POST' });
-      const data = await response.json();
+      const data = await readJsonResponse(response);
       if (!response.ok || !data.url) throw new Error(data.error ?? 'Nie udało się otworzyć subskrypcji.');
       window.location.href = data.url;
     } catch (portalError) {
@@ -217,6 +217,16 @@ export default function PricingPage() {
       </p>
     </main>
   );
+}
+
+async function readJsonResponse(response: Response): Promise<{ url?: string; error?: string }> {
+  const body = await response.text();
+  if (!body) return {};
+  try {
+    return JSON.parse(body) as { url?: string; error?: string };
+  } catch {
+    return {};
+  }
 }
 
 interface PlanCardProps {

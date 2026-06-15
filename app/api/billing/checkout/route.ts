@@ -8,6 +8,18 @@ import { getCreditPackPrice, getStripe, getStripePrice } from '@/lib/stripe';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
+  try {
+    return await createCheckout(request);
+  } catch (error) {
+    console.error('[/api/billing/checkout]', error);
+    return NextResponse.json(
+      { error: 'Nie udało się otworzyć płatności. Spróbuj ponownie za chwilę.' },
+      { status: 500 }
+    );
+  }
+}
+
+async function createCheckout(request: NextRequest) {
   const access = await getAccountAccess();
   if (!access.signedIn || !access.userId) {
     return NextResponse.json({ error: 'Zaloguj się, aby wybrać Premium.' }, { status: 401 });
@@ -49,7 +61,20 @@ export async function POST(request: NextRequest) {
     LIMIT 1
   ` as Array<{ stripeCustomerId: string }>;
   const stripe = getStripe();
-  let customerId = customerRows[0]?.stripeCustomerId;
+  let customerId: string | undefined = customerRows[0]?.stripeCustomerId;
+
+  if (customerId) {
+    try {
+      const customer = await stripe.customers.retrieve(customerId);
+      if (customer.deleted) customerId = undefined;
+    } catch (error) {
+      if (isMissingStripeResource(error)) {
+        customerId = undefined;
+      } else {
+        throw error;
+      }
+    }
+  }
 
   if (!customerId) {
     const user = await currentUser();
@@ -121,4 +146,10 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ url: session.url }, { headers: { 'Cache-Control': 'no-store' } });
+}
+
+function isMissingStripeResource(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as { code?: unknown; statusCode?: unknown };
+  return candidate.code === 'resource_missing' || candidate.statusCode === 404;
 }
