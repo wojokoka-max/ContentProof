@@ -142,8 +142,14 @@ function isProceduralInstruction(text: string): boolean {
 }
 
 function isGenericSectionTitle(text: string): boolean {
-  return /^(?:składniki|przygotowanie|wykonanie|sposób przygotowania|instrukcja|krok po kroku|wskazówki|porady|faq|najczęstsze pytania|najczęstsze błędy|podsumowanie|ingredients|preparation|instructions|method|steps|tips|summary)$/i
-    .test(cleanText(text).trim());
+  const normalized = normalizeForMatch(text);
+  return /^(?:skladniki|przygotowanie|wykonanie|sposob przygotowania|instrukcja|krok po kroku|wskazowki|porady|faq|najczestsze pytania|najczestsze bledy|podsumowanie|w tym artykule znajdziesz|w artykule znajdziesz|spis tresci|ingredients|preparation|instructions|method|steps|tips|summary|table of contents)$/
+    .test(normalized);
+}
+
+function isUxIntroBlock(text: string): boolean {
+  return /^(?:w tym artykule znajdziesz|w artykule znajdziesz|spis tresci|table of contents)\b/
+    .test(normalizeForMatch(text));
 }
 
 function isUsableTitleSource(text: string | null | undefined): boolean {
@@ -151,6 +157,7 @@ function isUsableTitleSource(text: string | null | undefined): boolean {
   return Boolean(
     cleaned &&
     !isGenericSectionTitle(cleaned) &&
+    !isUxIntroBlock(cleaned) &&
     !isProceduralInstruction(cleaned) &&
     !isListLikeText(cleaned) &&
     !/:\s*$/.test(cleaned)
@@ -184,6 +191,7 @@ function contentSentences(content: StructuredContent): string[] {
   const fromParagraphs = content.paragraphs.flatMap(paragraph => {
     if (isStructuralMetaBlock(paragraph.text, content)) return [];
     if (isFaqSectionContent(paragraph.text, content)) return [];
+    if (isUxIntroBlock(paragraph.text)) return [];
     if (content.analysisMode === 'html' && isProcedureSectionContent(paragraph.text, content)) return [];
     return safeTextCandidate(paragraph.text).split(/(?<=[.!?])\s+/);
   });
@@ -194,6 +202,7 @@ function contentSentences(content: StructuredContent): string[] {
   return sentenceCandidates
     .filter(sentence => !isStructuralMetaBlock(sentence, content))
     .filter(sentence => !isFaqSectionContent(sentence, content))
+    .filter(sentence => !isUxIntroBlock(sentence))
     .filter(sentence => content.analysisMode !== 'html' || !isProcedureSectionContent(sentence, content))
     .map(sentence => safeTextCandidate(sentence))
     .filter((sentence, index, all) =>
@@ -250,6 +259,7 @@ function mainIntroduction(content: StructuredContent, title: string): string {
       candidate.position >= 0 &&
       candidate.position < firstSectionPosition &&
       !isStructuralMetaBlock(candidate.text, content) &&
+      !isUxIntroBlock(candidate.text) &&
       !isListLikeText(candidate.text)
     )
     .sort((a, b) => a.position - b.position);
@@ -416,6 +426,64 @@ function validateGeneratedDescription(description: string, title: string, conten
   return cleaned;
 }
 
+function sentenceParts(text: string): string[] {
+  return safeTextCandidate(text)
+    .split(/(?<=[.!?])\s+/)
+    .map(sentence => sentence.trim())
+    .filter(Boolean);
+}
+
+function startsWithSameTopic(a: string, b: string): boolean {
+  const topicWords = normalizeForMatch(a)
+    .split(' ')
+    .filter(word => word.length >= 4)
+    .slice(0, 5);
+  const normalizedTarget = normalizeForMatch(b);
+
+  return topicWords.length >= 3 && topicWords.every(word => normalizedTarget.includes(word));
+}
+
+function finalizeMetaDescription(description: string, title: string, content: StructuredContent): string {
+  const cleaned = validateGeneratedDescription(description, title, content);
+  if (!cleaned) return '';
+
+  const parts = sentenceParts(cleaned).filter(sentence =>
+    !isUxIntroBlock(sentence) &&
+    !isGenericSectionTitle(sentence) &&
+    !isListLikeText(sentence) &&
+    !/:\s*$/.test(sentence)
+  );
+
+  if (parts.length >= 2 && parts[1].length >= 70 && parts[1].length <= 160 && startsWithSameTopic(parts[0], parts[1])) {
+    parts.shift();
+  }
+
+  const selected: string[] = [];
+  for (const sentence of parts) {
+    const candidate = [...selected, sentence].join(' ');
+    if (candidate.length > 160) {
+      if (selected.length > 0) break;
+      continue;
+    }
+
+    selected.push(sentence);
+    if (candidate.length >= 130) break;
+  }
+
+  const result = selected.join(' ').trim();
+  if (result.length >= 70 && result.length <= 160) return result;
+
+  const fallback = contentSentences(content).find(sentence =>
+    sentence.length >= 70 &&
+    sentence.length <= 160 &&
+    !isUxIntroBlock(sentence)
+  );
+
+  if (fallback) return fallback;
+
+  return result || parts.find(sentence => sentence.length <= 160) || '';
+}
+
 export function extractMainTopic(content: StructuredContent): {
   h1: string;
   topWords: string[];
@@ -426,9 +494,7 @@ export function extractMainTopic(content: StructuredContent): {
     content.implicitH1,
     content.headings[0]?.text,
   ];
-  const h1 = content.analysisMode === 'html'
-    ? safeTextCandidate(h1Candidates.find(isUsableTitleSource))
-    : safeTextCandidate(h1Candidates.find(candidate => safeTextCandidate(candidate)));
+  const h1 = safeTextCandidate(h1Candidates.find(isUsableTitleSource));
 
   const stopPL = new Set(['sie','się','nie','jak','dla','oraz','przez','jest','są','być','ze','co','ale','czy','już','przy','więcej','tylko','też','ten','tej','tego','które','który','która','na','do','pod','nad']);
   const stopEN = new Set(['the','and','that','this','with','from','what','when','where','which','about']);
@@ -488,12 +554,11 @@ function titleFromCurrentContent(content: StructuredContent, h1: string): string
     firstMeaningfulSentence(content),
     content.paragraphs.find(paragraph =>
       isUsableTitleSource(paragraph.text) &&
+      !isUxIntroBlock(paragraph.text) &&
       !isProcedureSectionContent(paragraph.text, content)
     )?.text,
   ];
-  const source = content.analysisMode === 'html'
-    ? safeTextCandidate(candidates.find(isUsableTitleSource))
-    : safeTextCandidate(candidates.find(candidate => safeTextCandidate(candidate)));
+  const source = safeTextCandidate(candidates.find(isUsableTitleSource));
   if (!source) return '';
 
   const withoutBrand = source.split(/\s[|–—-]\s/)[0]?.trim() || source;
@@ -559,7 +624,7 @@ function generateMetaDescription(content: StructuredContent, title: string): str
     return existingDescription;
   }
 
-  return buildDescriptionFromContent(content, title);
+  return finalizeMetaDescription(buildDescriptionFromContent(content, title), title, content);
 }
 
 function generateJsonLd(

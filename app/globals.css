@@ -568,19 +568,21 @@ body {
   width: min(1120px, 100%);
   min-height: 72px;
   margin: 0 auto;
-  padding: 18px 24px;
+  padding: 28px 28px max(30px, env(safe-area-inset-bottom));
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 28px;
   color: var(--ink-60);
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .site-footer-links {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  align-items: center;
+  gap: 12px 22px;
 }
 
 .site-footer a {
@@ -597,6 +599,7 @@ body {
 .site-footer p {
   margin: 0;
   text-align: right;
+  white-space: nowrap;
 }
 
 .pricing-header p {
@@ -787,14 +790,19 @@ body {
 @media (max-width: 640px) {
   .site-footer-inner {
     min-height: 0;
-    padding: 20px 16px;
+    padding: 24px 18px max(28px, env(safe-area-inset-bottom));
     align-items: flex-start;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
+  }
+
+  .site-footer-links {
+    gap: 10px 18px;
   }
 
   .site-footer p {
     text-align: left;
+    white-space: normal;
   }
 
   .app-header {
