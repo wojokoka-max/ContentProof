@@ -277,6 +277,26 @@ function findFaqSupportingSentence(
 }
 
 function splitFaqAnswerAtConnector(answer: string): string | null {
+  const utfMatch = answer.match(
+    /^(.+?)(?:,\s+|\s+)(ale|jednak|ponieważ|dlatego|więc|także)\s+(.+)$/i
+  );
+  if (utfMatch) {
+    const first = utfMatch[1].trim().replace(/[.!?â€¦]+$/, '');
+    const connector = utfMatch[2].toLowerCase();
+    const rest = utfMatch[3].trim().replace(/^[,.;:\s]+/, '');
+    if (!first || !rest) return null;
+
+    const transition = connector === 'ale' || connector === 'jednak'
+      ? 'Jednak'
+      : connector === 'ponieważ'
+        ? 'Wynika to z tego, że'
+        : connector === 'dlatego' || connector === 'więc'
+          ? 'Dlatego'
+          : 'Ponadto';
+
+    return `${first}. ${transition} ${rest.charAt(0).toLowerCase()}${rest.slice(1)}`;
+  }
+
   const match = answer.match(
     /^(.+?)(?:,\s+|\s+)(ale|jednak|ponieważ|dlatego|więc|także)\s+(.+)$/i
   );
@@ -396,7 +416,22 @@ function answerFromSection(content: StructuredContent, headingText: string): str
     .replace(headingText, '')
     .trim();
 
-  return summarizeFaqAnswer(normalizeSectionAnswer(sectionText, headingText));
+  const normalizedSection = normalizeSectionAnswer(sectionText, headingText);
+  const summarized = summarizeFaqAnswer(normalizedSection);
+  const summarizedSentenceCount = summarized
+    ? summarized.split(/(?<=[.!?])\s+/).map(sentence => sentence.trim()).filter(Boolean).length
+    : 0;
+  if (summarized && summarizedSentenceCount >= 2) return summarized;
+
+  const directSentences = normalizedSection
+    .split(/(?<=[.!?])\s+/)
+    .map(sentence => sentence.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  const directAnswer = directSentences.join(' ');
+  if (directSentences.length >= 2 && directAnswer.length >= 80) return directAnswer;
+
+  return summarized;
 }
 
 function answerFromArticleSentences(content: StructuredContent, patterns: RegExp[]): string | null {
@@ -742,6 +777,13 @@ function h2ToQuestion(h2: string, lang: 'pl' | 'en'): string | null {
   }
 
   if (lang === 'pl') {
+    if (/\belementy\b/i.test(t) && /\b(naj|klucz|wa)/i.test(t))
+      return 'Jakie elementy są najważniejsze?';
+    if (/najcz/i.test(t) && /b.{0,4}dy/i.test(t))
+      return 'Jakich błędów unikać?';
+    if (/wskaz/i.test(t))
+      return 'Na co warto zwrócić uwagę?';
+
     if (/^(jak (zrobić|przygotować|upiec|ugotować)|przygotowanie|wykonanie|instrukcja|krok po kroku)/i.test(t))
       return null;
     if (/^(składniki|lista składników|potrzebne składniki)$/i.test(t))
@@ -768,6 +810,8 @@ function h2ToQuestion(h2: string, lang: 'pl' | 'en'): string | null {
     // 2. Universal semantic patterns — work for ANY topic domain
     if (/^(najważniejsze\s+)?(zalety|korzyści|plusy)/i.test(t))
       return `Jakie są ${lower}?`;
+    if (/^(najważniejsze\s+)?(elementy|składniki sukcesu|kluczowe elementy|ważne elementy)/i.test(t))
+      return 'Jakie elementy są najważniejsze?';
     if (/^(wady|minusy|ograniczenia|problemy z)/i.test(t))
       return `Jakie są ${lower}?`;
     if (/^(błędy|najczęstsze błędy|pułapki|czego unikać)/i.test(t))
@@ -895,7 +939,14 @@ function generateFaqFromContent(content: StructuredContent): Array<{ question: s
 
   const addQuestion = (item: { question: string; answer: string }): void => {
     const question = cleanText(cleanQuestion(item.question));
-    const answer = buildPublishableFaqAnswer(content, question, item.answer);
+    const preparedAnswer = item.answer
+      .replace(/,\s+ale\s+/i, '. Jednak ')
+      .replace(/,\s+jednak\s+/i, '. Jednak ')
+      .replace(/,\s+ponieważ\s+/i, '. Wynika to z tego, że ')
+      .replace(/,\s+dlatego\s+/i, '. Dlatego ')
+      .replace(/,\s+więc\s+/i, '. Dlatego ')
+      .replace(/,\s+także\s+/i, '. Ponadto ');
+    const answer = buildPublishableFaqAnswer(content, question, preparedAnswer);
     if (!answer) return;
     const normalized = { question, answer };
     if (!isQuestionValid(question, h1) || !isPublishableFaqItem(normalized)) return;
