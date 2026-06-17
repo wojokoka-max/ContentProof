@@ -1,6 +1,8 @@
 import type { StructuredContent, SeoPack, ContentType } from './types';
 import { cleanText } from './utils/cleanText';
 
+const CANONICAL_PLACEHOLDER = 'TU_WSTAW_PELNY_ADRES_ARTYKULU';
+
 export function detectContentType(content: StructuredContent): ContentType {
   const text = content.plainText.toLowerCase();
   const headings = content.headings.map(h => h.text.toLowerCase());
@@ -701,10 +703,9 @@ function generateJsonLd(
   contentType: ContentType,
   title: string,
   description: string,
-  slug: string,
+  url: string,
   faqItems: Array<{ question: string; answer: string }>
 ): string {
-  const url = content.canonical ?? `https://twojadomena.pl/${slug}`;
   const datePublished = new Date().toISOString().split('T')[0];
   const schemaType = contentType === 'blog-post' ? 'BlogPosting' : 'Article';
 
@@ -796,16 +797,21 @@ function generateHeadBlock(seo: Omit<SeoPack, 'headBlock' | 'jsonLd'>, jsonLd: s
   return lines.filter(line => line !== '').join('\n');
 }
 
+function canonicalForSeoPack(content: StructuredContent): string {
+  const canonical = cleanText(content.canonical ?? '').replace(/\s+/g, '').trim();
+  return canonical || CANONICAL_PLACEHOLDER;
+}
+
 export function generateSeoPack(
   content: StructuredContent,
   faqItems: Array<{ question: string; answer: string }> = []
 ): SeoPack {
   const contentType = detectContentType(content);
-  const { h1, topWords, slug } = extractMainTopic(content);
+  const { h1, topWords } = extractMainTopic(content);
 
   const title = cleanText(generateTitle(content, h1));
   const metaDescription = cleanText(generateMetaDescription(content, title));
-  const canonical = content.canonical ?? `https://twojadomena.pl/${slug}`;
+  const canonical = canonicalForSeoPack(content);
 
   const ogTitle = shortenAtWord(title, 95);
   const ogDesc = shortenAtWord(metaDescription, 200);
@@ -824,7 +830,7 @@ export function generateSeoPack(
   };
 
   const robotsMeta = 'index, follow';
-  const jsonLd = generateJsonLd(content, contentType, title, metaDescription, slug, faqItems);
+  const jsonLd = generateJsonLd(content, contentType, title, metaDescription, canonical, faqItems);
   const partial = {
     contentType,
     title,
