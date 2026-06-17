@@ -16,10 +16,34 @@ export function detectContentType(content: StructuredContent): ContentType {
     text.includes('poradnik') || text.includes('guide') ||
     content.wordCount > 1200;
 
-  if (hasFaq) return 'faq-page';
+  if (hasFaq && isPrimaryFaqPage(content)) return 'faq-page';
   if (hasHowTo) return 'how-to';
   if (isBlog) return 'blog-post';
   return 'article';
+}
+
+function isPrimaryFaqPage(content: StructuredContent): boolean {
+  const titleLike = [
+    content.metaTitle,
+    content.implicitH1,
+    content.headings.find(heading => heading.level === 1)?.text,
+    content.headings[0]?.text,
+  ].map(text => normalizeForMatch(text ?? '')).find(Boolean) ?? '';
+
+  if (/^(faq|najczestsze pytania|pytania i odpowiedzi|questions and answers)$/.test(titleLike)) {
+    return true;
+  }
+
+  const topLevelHeadings = content.headings.filter(heading => heading.level <= 2);
+  const faqHeadings = topLevelHeadings.filter(heading =>
+    /^(faq|najczestsze pytania|pytania i odpowiedzi|questions and answers)$/.test(normalizeForMatch(heading.text))
+  );
+  const nonFaqHeadings = topLevelHeadings.filter(heading =>
+    !/^(faq|najczestsze pytania|pytania i odpowiedzi|questions and answers)$/.test(normalizeForMatch(heading.text)) &&
+    !isGenericSectionTitle(heading.text)
+  );
+
+  return faqHeadings.length > 0 && nonFaqHeadings.length === 0 && content.faqItems.length >= 3;
 }
 
 function isUrlLikeText(text: string): boolean {
@@ -302,6 +326,32 @@ function isRecipeArticle(content: StructuredContent, title: string): boolean {
     /\b(lody|ciasto|deser|zupa|salatka|koktajl|chleb|bulki|nalesniki)\b/.test(normalizedTitle);
 }
 
+function hasTopicClaim(content: StructuredContent, pattern: RegExp): boolean {
+  const titleLike = [
+    content.metaTitle,
+    content.implicitH1,
+    content.headings.find(heading => heading.level === 1)?.text,
+    content.headings[0]?.text,
+  ].map(text => normalizeForMatch(text ?? '')).join(' ');
+
+  pattern.lastIndex = 0;
+  if (pattern.test(titleLike)) return true;
+
+  const firstSectionPosition = content.headings
+    .filter(heading => heading.level >= 2 && heading.position >= 0)
+    .map(heading => heading.position)
+    .sort((a, b) => a - b)[0] ?? Math.min(content.plainText.length, 800);
+  const intro = normalizeForMatch(content.plainText.slice(0, Math.min(firstSectionPosition, 800)));
+
+  pattern.lastIndex = 0;
+  if (pattern.test(intro)) return true;
+
+  const normalizedText = normalizeForMatch(content.plainText);
+  pattern.lastIndex = 0;
+  const matches = normalizedText.match(pattern);
+  return (matches?.length ?? 0) >= 2;
+}
+
 function joinPolishList(items: string[]): string {
   if (items.length <= 1) return items[0] ?? '';
   if (items.length === 2) return `${items[0]} i ${items[1]}`;
@@ -319,15 +369,15 @@ function buildRecipeInsight(content: StructuredContent, title: string): string {
   const descriptors: string[] = [];
   const exclusions: string[] = [];
 
-  if (confirms(/\blow\s*carb\b/) && !/\blow\s*carb\b/.test(normalizedTitle.toLowerCase())) {
+  if (hasTopicClaim(content, /\blow\s*carb\b/g) && !/\blow\s*carb\b/.test(normalizedTitle.toLowerCase())) {
     descriptors.push('low carb');
   }
-  if (confirms(/\bketo\b/) && !/\bketo\b/.test(normalizedTitle.toLowerCase())) {
+  if (hasTopicClaim(content, /\bketo\b/g) && !/\bketo\b/.test(normalizedTitle.toLowerCase())) {
     descriptors.push('keto');
   }
-  if (confirms(/\bbez cukru\b|nie zawiera\w*[^.]{0,50}\bcukru\b/)) exclusions.push('cukru');
-  if (confirms(/\bbez (?:dodatku )?banana\w*|nie zawiera\w*[^.]{0,50}\bbanana\w*/)) exclusions.push('banana');
-  if (confirms(/\bbez (?:dodatku )?skrobi\b|nie zawiera\w*[^.]{0,70}\bskrobi\b|\bani skrobi\b/)) exclusions.push('skrobi');
+  if (hasTopicClaim(content, /\bbez cukru\b|nie zawiera\w*[^.]{0,50}\bcukru\b/g)) exclusions.push('cukru');
+  if (hasTopicClaim(content, /\bbez (?:dodatku )?banana\w*|nie zawiera\w*[^.]{0,50}\bbanana\w*/g)) exclusions.push('banana');
+  if (hasTopicClaim(content, /\bbez (?:dodatku )?skrobi\b|nie zawiera\w*[^.]{0,70}\bskrobi\b|\bani skrobi\b/g)) exclusions.push('skrobi');
 
   if (exclusions.length > 0) {
     descriptors.push(`bez ${joinPolishList([...new Set(exclusions)])}`);
@@ -529,8 +579,8 @@ function firstMeaningfulSentence(content: StructuredContent): string {
     .find(sentence =>
       sentence.length >= 40 &&
       sentence.length <= 180 &&
-      (content.analysisMode !== 'html' || !isProceduralInstruction(sentence)) &&
-      (content.analysisMode !== 'html' || !isProcedureSectionContent(sentence, content)) &&
+      !isProceduralInstruction(sentence) &&
+      !isProcedureSectionContent(sentence, content) &&
       !isStructuralMetaBlock(sentence, content)
     ) ?? '';
 }
@@ -543,6 +593,25 @@ function shortenAtWord(text: string, maxLength: number): string {
     .replace(/\s+\S*$/, '')
     .replace(/\s+(?:i|oraz|z|ze|w|we|na|do|and|with|of)$/i, '')
     .trim();
+}
+
+function removeTrailingBrand(text: string): string {
+  const pipeParts = text.split(/\s\|\s/);
+  if (pipeParts.length > 1) return pipeParts[0]?.trim() || text;
+
+  const dashMatch = text.match(/^(.*?)\s[-\u2013\u2014]\s(.+)$/);
+  if (!dashMatch) return text;
+
+  const left = dashMatch[1]?.trim() ?? '';
+  const right = dashMatch[2]?.trim() ?? '';
+  const normalizedRight = normalizeForMatch(right);
+  const rightWords = normalizedRight.split(' ').filter(Boolean);
+  const looksLikeBrand =
+    rightWords.length > 0 &&
+    rightWords.length <= 3 &&
+    !/\b(przepis|poradnik|praktycz|prosty|szybki|sycacy|bez|low|carb|keto|jak|dlaczego|co|czy)\b/.test(normalizedRight);
+
+  return looksLikeBrand && left ? left : text;
 }
 
 function titleFromCurrentContent(content: StructuredContent, h1: string): string {
@@ -561,7 +630,7 @@ function titleFromCurrentContent(content: StructuredContent, h1: string): string
   const source = safeTextCandidate(candidates.find(isUsableTitleSource));
   if (!source) return '';
 
-  const withoutBrand = source.split(/\s[|–—-]\s/)[0]?.trim() || source;
+  const withoutBrand = removeTrailingBrand(source);
   const firstSentence = withoutBrand.split(/(?<=[.!?])\s+/)[0]?.trim() || withoutBrand;
   return shortenAtWord(firstSentence, 60);
 }
@@ -571,10 +640,10 @@ function enhanceTitle(title: string, content: StructuredContent): string {
   if (!cleaned) return '';
   if (cleaned.length >= 35) return shortenAtWord(cleaned, 60);
 
-  const text = content.plainText.toLowerCase();
   const suffixes: string[] = [];
-  if (/low\s*carb/i.test(text) && !/low\s*carb/i.test(cleaned)) suffixes.push('low carb');
-  if (/bez cukru/i.test(text) && !/bez cukru/i.test(cleaned)) suffixes.push('bez cukru');
+  if (hasTopicClaim(content, /\blow\s*carb\b/g) && !/low\s*carb/i.test(cleaned)) suffixes.push('low carb');
+  if (hasTopicClaim(content, /\bbez cukru\b/g) && !/bez cukru/i.test(cleaned)) suffixes.push('bez cukru');
+  const text = content.plainText.toLowerCase();
   if (/ciasto|deser|wypiek/i.test(text) && !/ciasto|deser|wypiek/i.test(cleaned)) suffixes.push('ciasto');
 
   const enhanced = suffixes.length > 0

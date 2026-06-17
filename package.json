@@ -15,6 +15,7 @@
     "test:readability-blocks": "node lib/readabilityBlocks.test.js",
     "test:meta-input": "node lib/metaInputFlow.test.js",
     "test:semantic-meta": "node lib/semanticMetaDescription.test.js",
+    "test:meta-behavior": "node lib/metaGeneration.behavior.test.js",
     "test:checklist-safety": "node lib/checklistSafety.test.js",
     "test:publication-status": "node lib/publicationStatus.test.js",
     "test:url-mode": "node lib/urlMode.test.js",
@@ -25,7 +26,7 @@
     "test:history": "node lib/historySecurity.test.js",
     "test:limits": "node lib/usageLimits.test.js",
     "test:billing": "node lib/billingSecurity.test.js",
-    "test": "npm run test:parser && npm run test:e2e && npm run test:isolation && npm run test:seo-fallbacks && npm run test:internal-links && npm run test:readability-blocks && npm run test:meta-input && npm run test:semantic-meta && npm run test:checklist-safety && npm run test:publication-status && npm run test:url-mode && npm run test:html-mode && npm run test:faq-polish && npm run test:faq-behavior && npm run test:site-seo && npm run test:history && npm run test:limits && npm run test:billing"
+    "test": "npm run test:parser && npm run test:e2e && npm run test:isolation && npm run test:seo-fallbacks && npm run test:internal-links && npm run test:readability-blocks && npm run test:meta-input && npm run test:semantic-meta && npm run test:meta-behavior && npm run test:checklist-safety && npm run test:publication-status && npm run test:url-mode && npm run test:html-mode && npm run test:faq-polish && npm run test:faq-behavior && npm run test:site-seo && npm run test:history && npm run test:limits && npm run test:billing"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.39.5",
