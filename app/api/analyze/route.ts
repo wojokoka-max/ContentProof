@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { analyze } from '@/lib/engine';
 import { isUrl, fetchUrl } from '@/lib/fetcher';
+import { enhanceMetaAndFaqWithOpenAI } from '@/lib/openAiEditorialEnhancer';
 import type { InputMode, MetaInput } from '@/lib/types';
 import { detectInputMode } from '@/lib/parser/htmlParser';
 import { getAccountAccess } from '@/lib/auth';
@@ -129,7 +130,8 @@ export async function POST(req: NextRequest) {
           }, { status: 422 }, guestId);
         }
 
-        const result = analyze(html, 'url', analysisId, undefined, debug.fetchedUrl || raw);
+        let result = analyze(html, 'url', analysisId, undefined, debug.fetchedUrl || raw);
+        result = await enhanceMetaAndFaqWithOpenAI(result, html);
         result.fetchDebug = debug;
         await completeQuota(reservation.subjectId, analysisId, reservation.plan);
         return jsonNoStore({
@@ -154,7 +156,8 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Manual content mode ────────────────────────────────────────────────────
-    const result = analyze(raw, forcedMode, analysisId, forcedMode === 'text' ? metaInput : undefined);
+    let result = analyze(raw, forcedMode, analysisId, forcedMode === 'text' ? metaInput : undefined);
+    result = await enhanceMetaAndFaqWithOpenAI(result, raw);
     await completeQuota(reservation.subjectId, analysisId, reservation.plan);
     return jsonNoStore({
       ...result,

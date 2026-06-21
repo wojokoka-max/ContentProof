@@ -1,4 +1,4 @@
-import type { StructuredContent, SeoPack, ContentType } from './types';
+import type { StructuredContent, SeoPack, ContentType, FaqItem } from './types';
 import { cleanText } from './utils/cleanText';
 
 const CANONICAL_DOMAIN_PLACEHOLDER = 'https://twojadomena.pl';
@@ -806,6 +806,112 @@ function generateHeadBlock(seo: Omit<SeoPack, 'headBlock' | 'jsonLd'>, jsonLd: s
   ];
 
   return lines.filter(line => line !== '').join('\n');
+}
+
+function schemaTypeOf(entity: unknown): string {
+  if (!entity || typeof entity !== 'object') return '';
+  const candidate = entity as Record<string, unknown>;
+  const type = candidate['@type'];
+  return typeof type === 'string' ? type : '';
+}
+
+function updateJsonLdForEditorial(
+  jsonLd: string,
+  title: string,
+  description: string,
+  faqItems: FaqItem[]
+): string {
+  try {
+    const parsed = JSON.parse(jsonLd) as Record<string, unknown>;
+    const context = parsed['@context'] ?? 'https://schema.org';
+    const graphSource = Array.isArray(parsed['@graph'])
+      ? parsed['@graph']
+      : [parsed].filter(Boolean);
+
+    const graph = graphSource
+      .filter(entity => schemaTypeOf(entity) !== 'FAQPage')
+      .map(entity => {
+        if (!entity || typeof entity !== 'object') return entity;
+        const candidate = entity as Record<string, unknown>;
+        const type = schemaTypeOf(candidate);
+        if (type === 'Article' || type === 'BlogPosting') {
+          return {
+            ...candidate,
+            headline: title,
+            description,
+          };
+        }
+        return candidate;
+      });
+
+    if (faqItems.length > 0) {
+      graph.push({
+        '@type': 'FAQPage',
+        mainEntity: faqItems.map(item => ({
+          '@type': 'Question',
+          name: item.question.trim(),
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: item.answer.trim(),
+          },
+        })),
+      });
+    }
+
+    if (graph.length === 1 && faqItems.length === 0) {
+      return JSON.stringify({
+        '@context': context,
+        ...(graph[0] as Record<string, unknown>),
+      }, null, 2);
+    }
+
+    return JSON.stringify({
+      '@context': context,
+      '@graph': graph,
+    }, null, 2);
+  } catch {
+    return jsonLd;
+  }
+}
+
+export function applySeoTextOverrides(
+  seoPack: SeoPack,
+  overrides: {
+    title?: string;
+    metaDescription?: string;
+    faqItems?: FaqItem[];
+  }
+): SeoPack {
+  const title = cleanText(overrides.title ?? seoPack.title).trim();
+  const metaDescription = cleanText(overrides.metaDescription ?? seoPack.metaDescription).trim();
+  const faqItems = overrides.faqItems ?? [];
+  const ogTitle = shortenAtWord(title, 95);
+  const ogDesc = shortenAtWord(metaDescription, 200);
+  const jsonLd = updateJsonLdForEditorial(seoPack.jsonLd, title, metaDescription, faqItems);
+
+  const partial = {
+    ...seoPack,
+    title,
+    titleLength: title.length,
+    metaDescription,
+    metaDescriptionLength: metaDescription.length,
+    ogTags: {
+      ...seoPack.ogTags,
+      title: ogTitle,
+      description: ogDesc,
+    },
+    twitterCard: {
+      ...seoPack.twitterCard,
+      title: ogTitle,
+      description: ogDesc,
+    },
+    jsonLd,
+  };
+
+  return {
+    ...partial,
+    headBlock: generateHeadBlock(partial, jsonLd),
+  };
 }
 
 function slugFromTitle(title: string): string {
