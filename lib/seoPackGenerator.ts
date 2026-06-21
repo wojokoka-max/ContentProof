@@ -303,7 +303,13 @@ function mainIntroduction(content: StructuredContent, title: string): string {
   const selected: string[] = [];
 
   for (const sentence of sentences) {
-    if ([...selected, sentence].join(' ').length > 160) break;
+    if ([...selected, sentence].join(' ').length > 160) {
+      if (selected.length === 0) {
+        const shortened = shortenAtWord(sentence, 155);
+        if (shortened.length >= 70) return shortened;
+      }
+      break;
+    }
     selected.push(sentence);
     if (selected.join(' ').length >= 100) break;
   }
@@ -514,6 +520,10 @@ function finalizeMetaDescription(description: string, title: string, content: St
   for (const sentence of parts) {
     const candidate = [...selected, sentence].join(' ');
     if (candidate.length > 160) {
+      if (selected.length === 0) {
+        const shortened = shortenAtWord(sentence, 155);
+        if (shortened.length >= 70) return shortened;
+      }
       if (selected.length > 0) break;
       continue;
     }
@@ -593,7 +603,8 @@ function shortenAtWord(text: string, maxLength: number): string {
   return cleaned
     .slice(0, maxLength)
     .replace(/\s+\S*$/, '')
-    .replace(/\s+(?:i|oraz|z|ze|w|we|na|do|and|with|of)$/i, '')
+    .replace(/\s+(?:ale|i|oraz|z|ze|w|we|na|do|and|with|of)$/i, '')
+    .replace(/[,;:]+$/, '')
     .trim();
 }
 

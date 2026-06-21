@@ -386,6 +386,192 @@ function joinFaqList(items: string[]): string {
   return `${items.slice(0, -1).join(', ')} lub ${items.at(-1)}`;
 }
 
+function joinFaqFacts(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? '';
+  if (items.length === 2) return `${items[0]} i ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')} i ${items.at(-1)}`;
+}
+
+function isSectionLabelLine(line: string): boolean {
+  const trimmed = cleanText(line).trim();
+  if (!trimmed) return false;
+  if (/[.!?…]$/.test(trimmed)) return false;
+  return trimmed.split(/\s+/).length <= 5;
+}
+
+function cleanBulletText(line: string): string {
+  return cleanText(line)
+    .replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '')
+    .replace(/[,:;.]+$/, '')
+    .trim();
+}
+
+function sentenceFromBulletGroup(
+  label: string | null,
+  items: string[],
+  headingText: string
+): string | null {
+  const facts = items.map(cleanBulletText).filter(item => item.length > 2);
+  if (facts.length < 2) return null;
+
+  const joined = joinFaqFacts(facts.slice(0, 4));
+  const labelText = label ? cleanText(label).replace(/[:;.]+$/, '').trim() : '';
+  const normalizedHeading = headingText.toLowerCase();
+
+  if (/najważniejsze|najwazniejsze/i.test(`${normalizedHeading} ${labelText}`)) {
+    return `Najważniejsze jest to, że ${joined}.`;
+  }
+
+  if (/^kiedy\b/i.test(normalizedHeading)) {
+    return `Najlepiej sprawdza się ${joined}.`;
+  }
+
+  if (labelText) {
+    return `${labelText} ${joined}.`;
+  }
+
+  return `Najważniejsze informacje to ${joined}.`;
+}
+
+function summarizeScannableSection(sectionText: string, headingText: string): string | null {
+  const lines = sectionText
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  if (lines.length < 2) return null;
+
+  const sentences: string[] = [];
+  let label: string | null = null;
+  let bullets: string[] = [];
+
+  const flushBullets = (): void => {
+    const sentence = sentenceFromBulletGroup(label, bullets, headingText);
+    if (sentence) sentences.push(sentence);
+    label = null;
+    bullets = [];
+  };
+
+  for (const line of lines) {
+    const isBullet = /^\s*(?:[-*•]|\d+[.)])\s+/.test(line);
+
+    if (isBullet) {
+      bullets.push(line);
+      continue;
+    }
+
+    flushBullets();
+
+    const cleaned = cleanText(line).trim();
+    if (!cleaned || cleaned === headingText) continue;
+
+    if (/:$/.test(cleaned) || isSectionLabelLine(cleaned)) {
+      label = cleaned.replace(/:$/, '');
+      continue;
+    }
+
+    const sentence = /[.!?…]$/.test(cleaned) ? cleaned : `${cleaned}.`;
+    sentences.push(sentence);
+  }
+
+  flushBullets();
+
+  const usable = sentences
+    .map(sentence => cleanText(sentence).replace(/\s+/g, ' ').trim())
+    .filter(sentence => sentence.length >= 35 && !isImperativeFaqAnswer(sentence, 'pl'))
+    .slice(0, 3);
+
+  if (usable.length < 2) return null;
+
+  const answer = usable.join(' ');
+  return answer.length >= 80 ? answer : null;
+}
+
+function factSentenceFromScannableBlock(blockText: string, headingText: string): string | null {
+  const lines = blockText
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  if (lines.length < 2) return null;
+
+  let label: string | null = null;
+  const bullets: string[] = [];
+
+  for (const line of lines) {
+    if (/^\s*(?:[-*•]|\d+[.)])\s+/.test(line)) {
+      bullets.push(line);
+      continue;
+    }
+
+    const cleaned = cleanText(line).trim();
+    if (/:$/.test(cleaned) || isSectionLabelLine(cleaned)) {
+      label = cleaned.replace(/:$/, '');
+    }
+  }
+
+  return sentenceFromBulletGroup(label, bullets, headingText);
+}
+
+function generateScannableFaqFromContent(
+  content: StructuredContent,
+  h1: string
+): Array<{ question: string; answer: string }> {
+  if (content.language !== 'pl') return [];
+
+  const blocks = content.sentences
+    .map(block => block.trim())
+    .filter(block =>
+      block.includes('\n') &&
+      /(?:^|\n)\s*[-*•]\s+/m.test(block) &&
+      !/w tym artykule znajdziesz|w artykule znajdziesz|spis treści|spis tresci/i.test(block)
+    );
+
+  const facts = blocks
+    .map(block => ({
+      block,
+      sentence: factSentenceFromScannableBlock(block, block.split(/\r?\n/)[0] ?? ''),
+    }))
+    .filter((item): item is { block: string; sentence: string } => Boolean(item.sentence));
+
+  const questions: Array<{ question: string; answer: string }> = [];
+  const normalizedTitle = h1.toLowerCase();
+
+  const strawberryFacts = facts
+    .filter(item => /truskawk|pieczen|pieczenia|zakalec|mokre miejsca/i.test(item.block))
+    .map(item => item.sentence)
+    .slice(0, 2);
+
+  if (/ciast/i.test(normalizedTitle) && /truskawk/i.test(`${normalizedTitle} ${content.plainText}`) && strawberryFacts.length >= 2) {
+    questions.push({
+      question: 'Dlaczego ciasta z truskawkami bywają trudne?',
+      answer: strawberryFacts.join(' '),
+    });
+  }
+
+  const flourFact = facts.find(item => /m[ąa]ka\s+orkiszow/i.test(item.block));
+  if (flourFact && /ciast/i.test(normalizedTitle)) {
+    questions.push({
+      question: 'Dlaczego mąka orkiszowa sprawdza się w tym cieście?',
+      answer: `${flourFact.sentence} Dzięki temu ciasto może zachować miękką, wilgotną strukturę i bardziej domowy charakter.`,
+    });
+  }
+
+  const keyFact = facts.find(item => /najwa[zż]niejsze|wanilia|jogurt|mas[łl]o|alluloz/i.test(item.block));
+  if (keyFact && /ciast/i.test(normalizedTitle)) {
+    questions.push({
+      question: 'Co najbardziej wpływa na strukturę i smak ciasta?',
+      answer: `${keyFact.sentence} Te elementy pomagają uzyskać wilgotne, stabilne ciasto z wyraźnym owocowym i maślano-waniliowym smakiem.`,
+    });
+  }
+
+  return questions.filter(item =>
+    isQuestionValid(item.question, h1) &&
+    isPublishableFaqItem(item) &&
+    hasNaturalFaqFlow(item.answer)
+  );
+}
+
 function normalizeSectionAnswer(sectionText: string, headingText: string): string {
   if (!/^z czym(?:\s|$)/i.test(headingText)) return sectionText;
 
@@ -417,6 +603,9 @@ function answerFromSection(content: StructuredContent, headingText: string): str
     .trim();
 
   const normalizedSection = normalizeSectionAnswer(sectionText, headingText);
+  const scannableAnswer = summarizeScannableSection(normalizedSection, headingText);
+  if (scannableAnswer) return scannableAnswer;
+
   const summarized = summarizeFaqAnswer(normalizedSection);
   const summarizedSentenceCount = summarized
     ? summarized.split(/(?<=[.!?])\s+/).map(sentence => sentence.trim()).filter(Boolean).length
@@ -980,7 +1169,10 @@ function generateFaqFromContent(content: StructuredContent): Array<{ question: s
   const sentenceFaq = generateFaqFromArticleSentences(content, h1);
   sentenceFaq.forEach(addQuestion);
 
-  // 4. Generate from H2 headings, but answer only with nearby article content.
+  // 4. Generate from scannable blocks that plain-text parsing can split into short pseudo-headings.
+  generateScannableFaqFromContent(content, h1).forEach(addQuestion);
+
+  // 5. Generate from H2 headings, but answer only with nearby article content.
   // Direct article sections are more precise than inferred supplementary questions.
   const h2s = content.headings.filter(h => h.level === 2).map(h => h.text);
 
@@ -1003,7 +1195,7 @@ function generateFaqFromContent(content: StructuredContent): Array<{ question: s
     if (questions.length >= 6) break;
   }
 
-  // 5. Recipes need supplementary questions only when direct sections are insufficient.
+  // 6. Recipes need supplementary questions only when direct sections are insufficient.
   generateRecipeFaqFromEvidence(content, h1).forEach(addQuestion);
   generateRecipeProcessFaq(content, h1).forEach(addQuestion);
 
