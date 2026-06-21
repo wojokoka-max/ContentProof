@@ -1,7 +1,7 @@
 import type { StructuredContent, SeoPack, ContentType } from './types';
 import { cleanText } from './utils/cleanText';
 
-const CANONICAL_PLACEHOLDER = 'TU_WSTAW_PELNY_ADRES_ARTYKULU';
+const CANONICAL_DOMAIN_PLACEHOLDER = 'https://twojadomena.pl';
 
 export function detectContentType(content: StructuredContent): ContentType {
   const text = content.plainText.toLowerCase();
@@ -797,9 +797,17 @@ function generateHeadBlock(seo: Omit<SeoPack, 'headBlock' | 'jsonLd'>, jsonLd: s
   return lines.filter(line => line !== '').join('\n');
 }
 
-function canonicalForSeoPack(content: StructuredContent): string {
+function slugFromTitle(title: string): string {
+  const slug = normalizeForMatch(title)
+    .replace(/\s+/g, '-')
+    .replace(/^-|-$/g, '');
+
+  return slug || 'artykul';
+}
+
+function canonicalForSeoPack(content: StructuredContent, title: string): string {
   const canonical = cleanText(content.canonical ?? '').replace(/\s+/g, '').trim();
-  return canonical || CANONICAL_PLACEHOLDER;
+  return canonical || `${CANONICAL_DOMAIN_PLACEHOLDER}/${slugFromTitle(title)}`;
 }
 
 export function generateSeoPack(
@@ -811,7 +819,7 @@ export function generateSeoPack(
 
   const title = cleanText(generateTitle(content, h1));
   const metaDescription = cleanText(generateMetaDescription(content, title));
-  const canonical = canonicalForSeoPack(content);
+  const canonical = canonicalForSeoPack(content, title);
 
   const ogTitle = shortenAtWord(title, 95);
   const ogDesc = shortenAtWord(metaDescription, 200);
