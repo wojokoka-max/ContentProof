@@ -18,6 +18,13 @@ export const metadata: Metadata = {
   authors: [{ name: 'NextDoor Studio' }],
   creator: 'NextDoor Studio',
   publisher: 'NextDoor Studio',
+  icons: {
+    icon: [
+      { url: '/favicon-contentproof.png', type: 'image/png' },
+    ],
+    shortcut: '/favicon-contentproof.png',
+    apple: '/favicon-contentproof.png',
+  },
   alternates: {
     canonical: '/',
   },
