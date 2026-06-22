@@ -456,6 +456,28 @@ function buildRecipeEditorialDescription(title: string, introduction: string, co
   return shorter.length <= 160 ? shorter : shortenAtWord(shorter, 155);
 }
 
+function looksLikeArticleExcerptDescription(description: string, title: string): boolean {
+  const normalizedDescription = normalizeForMatch(description);
+  const normalizedTitle = normalizeForMatch(title);
+  if (!normalizedDescription || !normalizedTitle) return false;
+
+  const titleWords = normalizedTitle.split(' ').filter(word => word.length >= 4);
+  const startsWithTitleTopic = titleWords.length >= 2 &&
+    titleWords.slice(0, 4).every(word => normalizedDescription.slice(0, 100).includes(word));
+
+  return (
+    startsWithTitleTopic &&
+    /\b(ma|jest|lacze|laczy|przypomina|daje|utrzymuje|pozostaje)\b/.test(normalizedDescription) &&
+    !/\b(sprawdz|zobacz|poznaj|dowiedz|wybierz)\b/.test(normalizedDescription)
+  ) || /^w polaczeniu\b/.test(normalizedDescription);
+}
+
+function improveExistingRecipeDescription(description: string, title: string, content: StructuredContent): string {
+  if (!isRecipeArticle(content, title)) return '';
+  if (!looksLikeArticleExcerptDescription(description, title)) return '';
+  return buildRecipeEditorialDescription(title, description, content);
+}
+
 function detectPromise(content: StructuredContent): string {
   const headings = content.headings.map(heading => normalizeForMatch(heading.text));
   const text = normalizeForMatch(content.plainText);
@@ -742,6 +764,10 @@ function buildDescriptionFromContent(content: StructuredContent, title: string):
 function generateMetaDescription(content: StructuredContent, title: string): string {
   const existingDescription = safeTextCandidate(content.metaDescription);
   if (existingDescription && existingDescription.length >= 70 && existingDescription.length <= 160) {
+    const improvedDescription = content.language === 'pl'
+      ? improveExistingRecipeDescription(existingDescription, title, content)
+      : '';
+    if (improvedDescription) return improvedDescription;
     return existingDescription;
   }
 
