@@ -305,7 +305,7 @@ function mainIntroduction(content: StructuredContent, title: string): string {
   for (const sentence of sentences) {
     if ([...selected, sentence].join(' ').length > 160) {
       if (selected.length === 0) {
-        const shortened = shortenAtWord(sentence, 155);
+        const shortened = shortenMetaAtSentence(sentence, 155);
         if (shortened.length >= 70) return shortened;
       }
       break;
@@ -453,7 +453,7 @@ function buildRecipeEditorialDescription(title: string, introduction: string, co
   if (description.length >= 80 && description.length <= 160) return description;
 
   const shorter = `Sprawdź sposób na ${qualifiedTopic}. Zobacz, jak uzyskać dobry smak i stabilną strukturę.`;
-  return shorter.length <= 160 ? shorter : shortenAtWord(shorter, 155);
+  return shorter.length <= 160 ? shorter : shortenMetaAtSentence(shorter, 155);
 }
 
 function looksLikeArticleExcerptDescription(description: string, title: string): boolean {
@@ -582,7 +582,7 @@ function finalizeMetaDescription(description: string, title: string, content: St
     const candidate = [...selected, sentence].join(' ');
     if (candidate.length > 160) {
       if (selected.length === 0) {
-        const shortened = shortenAtWord(sentence, 155);
+        const shortened = shortenMetaAtSentence(sentence, 155);
         if (shortened.length >= 70) return shortened;
       }
       if (selected.length > 0) break;
@@ -594,7 +594,7 @@ function finalizeMetaDescription(description: string, title: string, content: St
   }
 
   const result = selected.join(' ').trim();
-  if (result.length >= 70 && result.length <= 160) return result;
+  if (result.length >= 70 && result.length <= 160) return shortenMetaAtSentence(result, 160);
 
   const fallback = contentSentences(content).find(sentence =>
     sentence.length >= 70 &&
@@ -602,9 +602,10 @@ function finalizeMetaDescription(description: string, title: string, content: St
     !isUxIntroBlock(sentence)
   );
 
-  if (fallback) return fallback;
+  if (fallback) return shortenMetaAtSentence(fallback, 160);
 
-  return result || parts.find(sentence => sentence.length <= 160) || '';
+  const looseFallback = result || parts.find(sentence => sentence.length <= 160) || '';
+  return shortenMetaAtSentence(looseFallback, 160);
 }
 
 export function extractMainTopic(content: StructuredContent): {
@@ -667,6 +668,16 @@ function shortenAtWord(text: string, maxLength: number): string {
     .replace(/\s+(?:ale|i|oraz|z|ze|w|we|na|do|and|with|of)$/i, '')
     .replace(/[,;:]+$/, '')
     .trim();
+}
+
+function shortenMetaAtSentence(text: string, maxLength: number): string {
+  const shortened = shortenAtWord(text, maxLength)
+    .replace(/\s+(?:ale|i|oraz|z|ze|w|we|na|do|dla|po|przy|because|and|with|of)$/i, '')
+    .replace(/[,\-;:\s]+$/, '')
+    .trim();
+
+  if (!shortened) return '';
+  return /[.!?]$/.test(shortened) ? shortened : `${shortened}.`;
 }
 
 function removeTrailingBrand(text: string): string {
@@ -758,7 +769,7 @@ function buildDescriptionFromContent(content: StructuredContent, title: string):
     isGoodMetaDescriptionSource(sentence) &&
     (content.analysisMode !== 'html' || !isProceduralInstruction(sentence))
   );
-  return shortenAtWord(rankedFallback || firstMeaningfulSentence(content), 155);
+  return shortenMetaAtSentence(rankedFallback || firstMeaningfulSentence(content), 155);
 }
 
 function generateMetaDescription(content: StructuredContent, title: string): string {
@@ -768,7 +779,7 @@ function generateMetaDescription(content: StructuredContent, title: string): str
       ? improveExistingRecipeDescription(existingDescription, title, content)
       : '';
     if (improvedDescription) return improvedDescription;
-    return existingDescription;
+    return shortenMetaAtSentence(existingDescription, 160);
   }
 
   return finalizeMetaDescription(buildDescriptionFromContent(content, title), title, content);
