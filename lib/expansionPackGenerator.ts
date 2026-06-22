@@ -1189,9 +1189,7 @@ function generateFaqFromContent(content: StructuredContent): Array<{ question: s
     if (seenQuestions.has(q.toLowerCase())) continue;
     const answer = answerFromSection(content, h2);
     if (!answer) continue;
-    const item = { question: q, answer };
-    if (!isPublishableFaqItem(item) || !hasNaturalFaqFlow(item.answer)) continue;
-    addQuestion(item);
+    addQuestion({ question: q, answer });
     if (questions.length >= 6) break;
   }
 
