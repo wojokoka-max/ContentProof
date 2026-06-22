@@ -411,10 +411,49 @@ function buildRecipeInsight(content: StructuredContent, title: string): string {
   const introduction = content.analysisMode === 'text'
     ? mainIntroduction(content, title)
     : '';
-  if (introduction) return introduction;
+  if (introduction) {
+    const editorialIntro = buildRecipeEditorialDescription(title, introduction, content);
+    return editorialIntro || introduction;
+  }
 
   const evidence = bestEvidence(content, title)[0];
   return evidence ? `${opening} ${evidence}` : opening;
+}
+
+function buildRecipeEditorialDescription(title: string, introduction: string, content: StructuredContent): string {
+  const topic = safeTextCandidate(title)
+    .replace(/[.!?]+$/, '')
+    .toLowerCase();
+  const intro = safeTextCandidate(introduction).replace(/[.!?]+$/, '');
+  if (!topic || !intro) return '';
+
+  const normalizedIntro = normalizeForMatch(intro);
+  const qualities: string[] = [];
+
+  if (/\blekk\w*/.test(normalizedIntro)) qualities.push('lekkie');
+  if (/\bwilgotn\w*/.test(normalizedIntro)) qualities.push('wilgotne');
+  if (/\bmaslan\w*/.test(normalizedIntro)) qualities.push('maślano-waniliowe');
+  if (/\bkremow\w*/.test(normalizedIntro)) qualities.push('kremowe');
+  if (/\bchrupi\w*/.test(normalizedIntro)) qualities.push('chrupiące');
+  if (/\bbez klasycznego cukru\b|\bbez cukru\b/.test(normalizedIntro) || hasTopicClaim(content, /\bbez cukru\b/g)) {
+    qualities.push('bez klasycznego cukru');
+  }
+
+  const uniqueQualities = [...new Set(qualities)].slice(0, 4);
+  const qualifiedTopic = uniqueQualities.length > 0
+    ? `${joinPolishList(uniqueQualities)} ${topic}`
+    : topic;
+
+  const isBakedCake = /\b(ciasto|wypiek|placek|babk|tarta|zakalec)\b/.test(normalizeForMatch(`${title} ${content.plainText}`));
+  const benefit = isBakedCake
+    ? 'Zobacz, jak uzyskać dobry smak i stabilną strukturę bez przypadkowego zakalca.'
+    : 'Zobacz, jak uzyskać dobry smak i stabilną strukturę.';
+
+  const description = `Sprawdź sposób na ${qualifiedTopic}. ${benefit}`;
+  if (description.length >= 80 && description.length <= 160) return description;
+
+  const shorter = `Sprawdź sposób na ${qualifiedTopic}. Zobacz, jak uzyskać dobry smak i stabilną strukturę.`;
+  return shorter.length <= 160 ? shorter : shortenAtWord(shorter, 155);
 }
 
 function detectPromise(content: StructuredContent): string {
