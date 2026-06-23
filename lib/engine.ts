@@ -119,7 +119,7 @@ function buildFixAll(
     .filter(f => f.impactPoints && (f.severity === 'error' || f.severity === 'warning'))
     .reduce((sum, f) => sum + (f.impactPoints ?? 0), 0);
 
-  const predictedNewScore = Math.min(98, currentScore + totalImpact);
+  const predictedNewScore = Math.max(currentScore, Math.min(100, currentScore + totalImpact));
 
   const internalLinksText = expansion.internalLinkSuggestions
     .map(l => `${l.anchorText} → ${l.suggestedSlug}`)

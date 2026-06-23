@@ -33,25 +33,36 @@ export async function getAccountAccess(): Promise<AccountAccess> {
 
   const user = await currentUser();
   const metadata = user?.publicMetadata ?? {};
+  const email = user?.primaryEmailAddress?.emailAddress?.toLowerCase() ?? null;
   const premiumUserIds = (process.env.PREMIUM_USER_IDS ?? '')
     .split(',')
     .map(value => value.trim())
+    .filter(Boolean);
+  const premiumEmails = (process.env.PREMIUM_EMAILS ?? '')
+    .split(',')
+    .map(value => value.trim().toLowerCase())
     .filter(Boolean);
   const adminUserIds = (process.env.ADMIN_USER_IDS ?? '')
     .split(',')
     .map(value => value.trim())
     .filter(Boolean);
+  const adminEmails = (process.env.ADMIN_EMAILS ?? '')
+    .split(',')
+    .map(value => value.trim().toLowerCase())
+    .filter(Boolean);
   const isAdmin =
     metadata.role === 'admin' ||
     metadata.admin === true ||
-    adminUserIds.includes(userId);
+    adminUserIds.includes(userId) ||
+    (email ? adminEmails.includes(email) : false);
   const billing = await getBillingAccess(userId);
   const isPremium =
     isAdmin ||
     billing.isSubscriber ||
     metadata.plan === 'premium' ||
     metadata.premium === true ||
-    premiumUserIds.includes(userId);
+    premiumUserIds.includes(userId) ||
+    (email ? premiumEmails.includes(email) : false);
 
   return {
     configured: true,

@@ -74,7 +74,8 @@ export function FixAllPanel({ fixAll, currentScore }: Props) {
     });
   }
 
-  const gain = fixAll.predictedNewScore - currentScore;
+  const predictedScore = Math.max(currentScore, fixAll.predictedNewScore);
+  const gain = predictedScore - currentScore;
 
   const faqText = fixAll.faqText;
 
@@ -141,11 +142,13 @@ export function FixAllPanel({ fixAll, currentScore }: Props) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 22, fontFamily: 'var(--font-display)', fontWeight: 700 }}>{currentScore}</span>
               <span style={{ fontSize: 16, color: 'var(--ink-40)' }}>→</span>
-              <span style={{ fontSize: 22, fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--signal-green)' }}>{fixAll.predictedNewScore}</span>
+              <span style={{ fontSize: 22, fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--signal-green)' }}>{predictedScore}</span>
               <span style={{ fontSize: 12, color: 'var(--ink-60)' }}>/100</span>
             </div>
             <div style={{ fontSize: 12, color: 'var(--ink-60)', lineHeight: 1.4 }}>
-              Przewidywany wynik po zastosowaniu wszystkich poprawek.
+              {gain > 0
+                ? 'Przewidywany wynik po zastosowaniu wszystkich poprawek.'
+                : 'Wynik jest już bardzo wysoki. Poprawki porządkują tekst i SEO, ale nie powinny obniżyć oceny.'}
             </div>
           </div>
 
