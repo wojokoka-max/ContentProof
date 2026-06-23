@@ -46,18 +46,6 @@ function formatCodeSize(code: string): string {
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
-function looksLikeCss(code: string): boolean {
-  const cleaned = code.trim();
-  if (!cleaned) return false;
-
-  const hasStyleTag = /<style\b/i.test(cleaned);
-  const hasCssRule = /(?:[.#]?[a-z0-9_-][^{]{0,90}|@[a-z-]+[^{]{0,90})\{[^}]*:[^}]*\}/i.test(cleaned);
-  const hasCssProperty = /\b(?:color|background|font-size|line-height|margin|padding|display|position|border|grid|flex|width|height|opacity|transform)\s*:/i.test(cleaned);
-  const hasSeoHeadTag = /<(?:meta|script|link|title)\b/i.test(cleaned);
-
-  return hasStyleTag || (hasCssRule && hasCssProperty && !hasSeoHeadTag);
-}
-
 function CopyBtn({ copied, onClick }: { copied: boolean; onClick: () => void }) {
   return (
     <button onClick={onClick} style={{
@@ -188,6 +176,50 @@ function SeoRow({ label, textValue, htmlCode, badge, badgeOk, copyKey, copiedKey
   );
 }
 
+const DEFAULT_ARTICLE_CSS = `.contentproof-article {
+  max-width: 760px;
+  margin: 0 auto;
+  font-size: 18px;
+  line-height: 1.75;
+  color: #181818;
+}
+
+.contentproof-article h1,
+.contentproof-article h2,
+.contentproof-article h3 {
+  line-height: 1.18;
+  color: #0a0a0a;
+}
+
+.contentproof-article h2 {
+  margin-top: 2.4em;
+  margin-bottom: 0.7em;
+}
+
+.contentproof-article p,
+.contentproof-article li {
+  margin-bottom: 0.85em;
+}
+
+.contentproof-article ul,
+.contentproof-article ol {
+  padding-left: 1.35em;
+  margin: 1em 0 1.4em;
+}
+
+.contentproof-article details {
+  padding: 16px 18px;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  margin: 14px 0;
+  background: #fafafa;
+}
+
+.contentproof-article summary {
+  cursor: pointer;
+  font-weight: 700;
+}`;
+
 function CodeWorkflowPanel({
   copiedKey,
   onCopy,
@@ -196,8 +228,8 @@ function CodeWorkflowPanel({
   onCopy: (t: string, k: string) => void;
 }) {
   const [headDraft, setHeadDraft] = useState('');
-  const [customCss, setCustomCss] = useState('');
-  const headLooksLikeCss = looksLikeCss(headDraft);
+  const [customCss, setCustomCss] = useState(DEFAULT_ARTICLE_CSS);
+  const headLooksLikeCss = false;
   const cleanCss = stripStyleWrapper(customCss);
   const wrappedCss = cleanCss
     ? `<style id="contentproof-custom-css">\n${cleanCss}\n</style>`
@@ -223,6 +255,7 @@ function CodeWorkflowPanel({
       </div>
 
       <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {false && (
         <div>
           <label htmlFor="head-code-check" style={{ display: 'block', fontSize: 11, color: 'var(--ink-60)', fontFamily: 'var(--font-mono)', marginBottom: 6 }}>
             Sprawdź kod przed wklejeniem do HEAD
@@ -281,6 +314,7 @@ function CodeWorkflowPanel({
             </div>
           )}
         </div>
+        )}
 
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' as const }}>
@@ -432,6 +466,31 @@ export function SeoPackPanel({ seoPack }: Props) {
       <SeoRow label="SEO Title"        textValue={seoPack.title}           htmlCode={`<title>${seoPack.title}</title>`}                              badge={`${seoPack.titleLength} zn.`} badgeOk={titleOk} copyKey="title"    copiedKey={copiedKey} onCopy={copy} />
       <SeoRow label="Meta Description" textValue={seoPack.metaDescription} htmlCode={`<meta name="description" content="${seoPack.metaDescription}">`} badge={`${seoPack.metaDescriptionLength} zn.`} badgeOk={descOk}  copyKey="desc"     copiedKey={copiedKey} onCopy={copy} />
       <SeoRow label="Canonical URL"    textValue={seoPack.canonical}       htmlCode={`<link rel="canonical" href="${seoPack.canonical}">`}             copyKey="canonical" copiedKey={copiedKey} onCopy={copy} mono />
+
+      <details style={{ border: '1px solid var(--ink-10)', borderRadius: 8, overflow: 'hidden', background: 'white' }}>
+        <summary style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 12,
+          padding: '11px 14px',
+          cursor: 'pointer',
+          listStyle: 'none',
+        }}>
+          <span>
+            <span style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>
+              Ustawienia zaawansowane SEO
+            </span>
+            <span style={{ display: 'block', fontSize: 12, color: 'var(--ink-60)', marginTop: 2 }}>
+              Schema, Open Graph, Robots i opcjonalny CSS artykułu.
+            </span>
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--ink-60)', fontFamily: 'var(--font-mono)' }}>
+            Pokaż
+          </span>
+        </summary>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 10px 10px', borderTop: '1px solid var(--ink-10)' }}>
       <SeoRow label="Open Graph"       textValue={`${seoPack.ogTags.title} | ${seoPack.ogTags.type}`} htmlCode={`<meta property="og:type" content="${seoPack.ogTags.type}">\n<meta property="og:title" content="${seoPack.ogTags.title}">\n<meta property="og:description" content="${seoPack.ogTags.description}">\n<meta property="og:url" content="${seoPack.canonical}">`} copyKey="og" copiedKey={copiedKey} onCopy={copy} />
       <SeoRow label="Twitter Card"     textValue={seoPack.twitterCard.title} htmlCode={`<meta name="twitter:card" content="${seoPack.twitterCard.card}">\n<meta name="twitter:title" content="${seoPack.twitterCard.title}">\n<meta name="twitter:description" content="${seoPack.twitterCard.description}">`} copyKey="twitter" copiedKey={copiedKey} onCopy={copy} />
       <SeoRow label="Robots"           textValue={seoPack.robotsMeta}      htmlCode={`<meta name="robots" content="${seoPack.robotsMeta}">`}          copyKey="robots"    copiedKey={copiedKey} onCopy={copy} mono />
@@ -478,6 +537,8 @@ export function SeoPackPanel({ seoPack }: Props) {
           </pre>
         </div>
       </div>
+        </div>
+      </details>
     </div>
   );
 }
