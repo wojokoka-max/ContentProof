@@ -17,6 +17,47 @@ const CONTENT_TYPE_LABEL: Record<string, string> = {
 
 type RowTab = 'tekst' | 'html';
 
+function stripStyleWrapper(css: string): string {
+  return css
+    .replace(/^\s*<style\b[^>]*>/i, '')
+    .replace(/<\/style>\s*$/i, '')
+    .trim();
+}
+
+function cssRuleCount(css: string): number {
+  const cleaned = stripStyleWrapper(css)
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/@keyframes[^{]+\{[\s\S]*?\}\s*\}/gi, '');
+
+  return (cleaned.match(/\{/g) ?? []).length;
+}
+
+function codeSizeBytes(code: string): number {
+  if (typeof TextEncoder !== 'undefined') {
+    return new TextEncoder().encode(code).length;
+  }
+
+  return code.length;
+}
+
+function formatCodeSize(code: string): string {
+  const bytes = codeSizeBytes(code);
+  if (bytes < 1024) return `${bytes} B`;
+  return `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+function looksLikeCss(code: string): boolean {
+  const cleaned = code.trim();
+  if (!cleaned) return false;
+
+  const hasStyleTag = /<style\b/i.test(cleaned);
+  const hasCssRule = /(?:[.#]?[a-z0-9_-][^{]{0,90}|@[a-z-]+[^{]{0,90})\{[^}]*:[^}]*\}/i.test(cleaned);
+  const hasCssProperty = /\b(?:color|background|font-size|line-height|margin|padding|display|position|border|grid|flex|width|height|opacity|transform)\s*:/i.test(cleaned);
+  const hasSeoHeadTag = /<(?:meta|script|link|title)\b/i.test(cleaned);
+
+  return hasStyleTag || (hasCssRule && hasCssProperty && !hasSeoHeadTag);
+}
+
 function CopyBtn({ copied, onClick }: { copied: boolean; onClick: () => void }) {
   return (
     <button onClick={onClick} style={{
@@ -147,6 +188,199 @@ function SeoRow({ label, textValue, htmlCode, badge, badgeOk, copyKey, copiedKey
   );
 }
 
+function CodeWorkflowPanel({
+  copiedKey,
+  onCopy,
+}: {
+  copiedKey: string | null;
+  onCopy: (t: string, k: string) => void;
+}) {
+  const [headDraft, setHeadDraft] = useState('');
+  const [customCss, setCustomCss] = useState('');
+  const headLooksLikeCss = looksLikeCss(headDraft);
+  const cleanCss = stripStyleWrapper(customCss);
+  const wrappedCss = cleanCss
+    ? `<style id="contentproof-custom-css">\n${cleanCss}\n</style>`
+    : '';
+  const ruleCount = cssRuleCount(cleanCss);
+  const cssSize = formatCodeSize(cleanCss);
+  const cssIsHeavy = cleanCss.length > 8000 || ruleCount > 80;
+
+  function moveHeadCssToCustomCss() {
+    setCustomCss(stripStyleWrapper(headDraft));
+    setHeadDraft('');
+  }
+
+  return (
+    <div style={{ border: '1px solid var(--ink-10)', borderRadius: 8, overflow: 'hidden', background: 'white' }}>
+      <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--ink-10)' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)', marginBottom: 6 }}>
+          HEAD i Custom CSS artykułu
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--ink-60)', lineHeight: 1.6 }}>
+          Sekcja HEAD służy do dodawania metadanych, schema.org, Open Graph, skryptów i kodów SEO. Nie wklejaj tutaj zwykłego CSS artykułu.
+        </div>
+      </div>
+
+      <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div>
+          <label htmlFor="head-code-check" style={{ display: 'block', fontSize: 11, color: 'var(--ink-60)', fontFamily: 'var(--font-mono)', marginBottom: 6 }}>
+            Sprawdź kod przed wklejeniem do HEAD
+          </label>
+          <textarea
+            id="head-code-check"
+            value={headDraft}
+            onChange={event => setHeadDraft(event.target.value)}
+            placeholder="Wklej tutaj kod HEAD, jeśli chcesz sprawdzić, czy nie jest zwykłym CSS."
+            style={{
+              width: '100%',
+              minHeight: 76,
+              resize: 'vertical',
+              padding: '10px 12px',
+              border: '1px solid var(--ink-10)',
+              borderRadius: 6,
+              background: 'var(--ink-5)',
+              color: 'var(--ink)',
+              fontSize: 12,
+              fontFamily: 'var(--font-mono)',
+              lineHeight: 1.6,
+            }}
+          />
+          {headDraft && (
+            <div style={{ marginTop: 7, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' as const }}>
+              <span style={{ fontSize: 11, color: 'var(--ink-60)' }}>Rozmiar: {formatCodeSize(headDraft)}</span>
+              {headLooksLikeCss && (
+                <>
+                  <span style={{
+                    padding: '4px 8px',
+                    borderRadius: 5,
+                    background: 'var(--signal-amber-bg)',
+                    color: 'var(--signal-amber)',
+                    fontSize: 11,
+                    lineHeight: 1.4,
+                  }}>
+                    Ten kod wygląda jak CSS. Czy chcesz przenieść go do sekcji Custom CSS?
+                  </span>
+                  <button
+                    type="button"
+                    onClick={moveHeadCssToCustomCss}
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: 5,
+                      border: '1px solid var(--ink-10)',
+                      background: 'white',
+                      color: 'var(--ink)',
+                      fontSize: 11,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Przenieś do Custom CSS
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' as const }}>
+            <div>
+              <label htmlFor="article-custom-css" style={{ display: 'block', fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>
+                Custom CSS artykułu
+              </label>
+              <div style={{ fontSize: 12, color: 'var(--ink-60)', marginTop: 3 }}>
+                Dodaj indywidualny CSS tylko dla tego artykułu.
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
+              <span style={{ fontSize: 11, padding: '3px 7px', borderRadius: 5, background: 'var(--ink-5)', color: 'var(--ink-60)' }}>
+                Reguły CSS: {ruleCount}
+              </span>
+              <span style={{ fontSize: 11, padding: '3px 7px', borderRadius: 5, background: 'var(--ink-5)', color: 'var(--ink-60)' }}>
+                Rozmiar: {cssSize}
+              </span>
+            </div>
+          </div>
+
+          <textarea
+            id="article-custom-css"
+            value={customCss}
+            onChange={event => setCustomCss(event.target.value)}
+            placeholder=".article-title { ... }"
+            style={{
+              width: '100%',
+              minHeight: 110,
+              resize: 'vertical',
+              padding: '10px 12px',
+              border: '1px solid var(--ink-10)',
+              borderRadius: 6,
+              background: 'var(--ink-5)',
+              color: 'var(--ink)',
+              fontSize: 12,
+              fontFamily: 'var(--font-mono)',
+              lineHeight: 1.6,
+            }}
+          />
+
+          {cssIsHeavy && (
+            <div style={{
+              marginTop: 7,
+              padding: '7px 9px',
+              borderRadius: 6,
+              background: 'var(--signal-amber-bg)',
+              color: 'var(--signal-amber)',
+              fontSize: 12,
+              lineHeight: 1.5,
+            }}>
+              CSS jest dość ciężki. Rozważ skrócenie selektorów, usunięcie duplikatów albo przeniesienie powtarzalnych stylów do globalnego pliku.
+            </div>
+          )}
+
+          {wrappedCss && (
+            <div style={{ marginTop: 10, position: 'relative' }}>
+              <pre style={{
+                margin: 0,
+                padding: '10px 12px',
+                background: '#0f0f0f',
+                color: '#e4e2e0',
+                borderRadius: 6,
+                fontSize: 11,
+                fontFamily: 'var(--font-mono)',
+                lineHeight: 1.6,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                maxHeight: 220,
+                overflowY: 'auto',
+              }}>
+                {wrappedCss}
+              </pre>
+              <button
+                type="button"
+                onClick={() => onCopy(wrappedCss, 'custom-css')}
+                style={{
+                  position: 'absolute',
+                  top: 7,
+                  right: 7,
+                  padding: '3px 8px',
+                  background: copiedKey === 'custom-css' ? 'var(--signal-green)' : 'rgba(255,255,255,0.12)',
+                  color: copiedKey === 'custom-css' ? 'white' : '#ccc',
+                  border: 'none',
+                  borderRadius: 4,
+                  fontSize: 10,
+                  fontFamily: 'var(--font-mono)',
+                  cursor: 'pointer',
+                }}
+              >
+                {copiedKey === 'custom-css' ? '✓' : 'kopiuj'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SeoPackPanel({ seoPack }: Props) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
@@ -202,6 +436,8 @@ export function SeoPackPanel({ seoPack }: Props) {
       <SeoRow label="Twitter Card"     textValue={seoPack.twitterCard.title} htmlCode={`<meta name="twitter:card" content="${seoPack.twitterCard.card}">\n<meta name="twitter:title" content="${seoPack.twitterCard.title}">\n<meta name="twitter:description" content="${seoPack.twitterCard.description}">`} copyKey="twitter" copiedKey={copiedKey} onCopy={copy} />
       <SeoRow label="Robots"           textValue={seoPack.robotsMeta}      htmlCode={`<meta name="robots" content="${seoPack.robotsMeta}">`}          copyKey="robots"    copiedKey={copiedKey} onCopy={copy} mono />
 
+      <CodeWorkflowPanel copiedKey={copiedKey} onCopy={copy} />
+
       {/* Schema — special: has JSON tab */}
       <div style={{ border: '1px solid var(--ink-10)', borderRadius: 8, overflow: 'hidden' }}>
         <div style={{
@@ -227,7 +463,7 @@ export function SeoPackPanel({ seoPack }: Props) {
         <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--ink-60)', lineHeight: 1.5 }}>
           {'Dodaj poniższy kod do sekcji '}
           <code style={{ background: 'var(--ink-5)', padding: '1px 5px', borderRadius: 3, fontFamily: 'var(--font-mono)', fontSize: 11 }}>&lt;head&gt;</code>
-          {' swojej strony lub w panelu CMS w polu "nagłówek strony".'}
+          {' swojej strony lub w panelu CMS w polu "nagłówek strony". Sekcja HEAD służy do metadanych, schema.org, Open Graph, skryptów i kodów SEO — nie do zwykłego CSS artykułu.'}
         </div>
         <div style={{ position: 'relative', margin: '0 14px 14px' }}>
           <pre style={{

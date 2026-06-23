@@ -9,7 +9,6 @@ import { FetchDebugPanel }    from './FetchDebugPanel';
 import { SeoPackPanel }       from './SeoPackPanel';
 import { ExpansionPackPanel } from './ExpansionPackPanel';
 import { FixAllPanel }        from './FixAllPanel';
-import { CustomCssPanel }     from './CustomCssPanel';
 
 interface Props {
   result: AnalysisResult;
@@ -26,7 +25,7 @@ const LANG_LABEL: Record<string, string> = { pl: 'Polski', en: 'Angielski' };
 const MODE_LABEL: Record<string, string> = { article: 'Artykuł', html: 'HTML', url: 'URL' };
 const MODE_COLOR: Record<string, string> = { text: 'var(--signal-green)', html: 'var(--ink-60)', url: 'var(--ink-60)' };
 
-type MainTab = 'overview' | 'seo-pack' | 'expansion' | 'css' | 'checklist';
+type MainTab = 'overview' | 'seo-pack' | 'expansion' | 'checklist';
 
 export function AnalysisReport({
   result,
@@ -147,10 +146,9 @@ export function AnalysisReport({
           { id: 'overview',  label: 'Kategorie',  badge: null },
           { id: 'seo-pack',  label: 'SEO Pack',   badge: null },
           { id: 'expansion', label: 'Content Expansion', badge: null },
-          { id: 'css',       label: 'Kod CSS',     badge: null },
           { id: 'checklist', label: 'Checklista', badge: issueCount > 0 ? String(issueCount) : null },
         ] as const).map(tab => {
-          const premiumLocked = !hasFullSeoPack && (tab.id === 'seo-pack' || tab.id === 'expansion' || tab.id === 'css');
+          const premiumLocked = !hasFullSeoPack && (tab.id === 'seo-pack' || tab.id === 'expansion');
           return (
           <button
             key={tab.id}
@@ -203,12 +201,6 @@ export function AnalysisReport({
       {mainTab === 'expansion' && (
         <div className="animate-fade-in">
           <ExpansionPackPanel key={result.analysisId} pack={result.expansionPack} />
-        </div>
-      )}
-
-      {mainTab === 'css' && (
-        <div className="animate-fade-in">
-          <CustomCssPanel key={result.analysisId} />
         </div>
       )}
 

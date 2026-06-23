@@ -28,7 +28,8 @@
     "test:history": "node lib/historySecurity.test.js",
     "test:limits": "node lib/usageLimits.test.js",
     "test:billing": "node lib/billingSecurity.test.js",
-    "test": "npm run test:parser && npm run test:e2e && npm run test:isolation && npm run test:seo-fallbacks && npm run test:internal-links && npm run test:readability-blocks && npm run test:meta-input && npm run test:semantic-meta && npm run test:meta-behavior && npm run test:seo-regression && npm run test:openai-editorial && npm run test:checklist-safety && npm run test:publication-status && npm run test:url-mode && npm run test:html-mode && npm run test:faq-polish && npm run test:faq-behavior && npm run test:site-seo && npm run test:history && npm run test:limits && npm run test:billing"
+    "test:custom-css-workflow": "node lib/customCssWorkflow.test.js",
+    "test": "npm run test:parser && npm run test:e2e && npm run test:isolation && npm run test:seo-fallbacks && npm run test:internal-links && npm run test:readability-blocks && npm run test:meta-input && npm run test:semantic-meta && npm run test:meta-behavior && npm run test:seo-regression && npm run test:openai-editorial && npm run test:checklist-safety && npm run test:publication-status && npm run test:url-mode && npm run test:html-mode && npm run test:faq-polish && npm run test:faq-behavior && npm run test:site-seo && npm run test:history && npm run test:limits && npm run test:billing && npm run test:custom-css-workflow"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.39.5",
