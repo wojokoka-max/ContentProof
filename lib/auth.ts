@@ -34,6 +34,9 @@ export async function getAccountAccess(): Promise<AccountAccess> {
   const user = await currentUser();
   const metadata = user?.publicMetadata ?? {};
   const email = user?.primaryEmailAddress?.emailAddress?.toLowerCase() ?? null;
+  const githubUsername = user?.externalAccounts
+    .find(account => account.provider === 'oauth_github')
+    ?.username?.toLowerCase() ?? null;
   const premiumUserIds = (process.env.PREMIUM_USER_IDS ?? '')
     .split(',')
     .map(value => value.trim())
@@ -50,11 +53,16 @@ export async function getAccountAccess(): Promise<AccountAccess> {
     .split(',')
     .map(value => value.trim().toLowerCase())
     .filter(Boolean);
+  const adminGithubUsernames = (process.env.ADMIN_GITHUB_USERNAMES ?? '')
+    .split(',')
+    .map(value => value.trim().toLowerCase())
+    .filter(Boolean);
   const isAdmin =
     metadata.role === 'admin' ||
     metadata.admin === true ||
     adminUserIds.includes(userId) ||
-    (email ? adminEmails.includes(email) : false);
+    (email ? adminEmails.includes(email) : false) ||
+    (githubUsername ? adminGithubUsernames.includes(githubUsername) : false);
   const billing = await getBillingAccess(userId);
   const isPremium =
     isAdmin ||

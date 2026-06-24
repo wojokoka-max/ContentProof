@@ -116,27 +116,53 @@ function collectCandidates(html: string, openTagRegex: RegExp, priority: number)
 }
 
 export function extractPrimaryContentHtml(html: string): string {
+  const articleCandidates = collectCandidates(html, /<(article)\b[^>]*>/gi, 5);
+  const mainCandidates = collectCandidates(html, /<(main)\b[^>]*>/gi, 4);
+  const contentCandidates = collectCandidates(
+    html,
+    /<(div|section)\b(?=[^>]*\bclass=["'][^"']*(?:entry-content|post-content|wp-block-post-content|elementor-widget-theme-post-content|single-content|text_content)[^"']*["'])[^>]*>/gi,
+    3,
+  );
+  const textBlockCandidates = collectCandidates(
+    html,
+    /<(div|section)\b(?=[^>]*\bdata-element-type=["']text["'])[^>]*>/gi,
+    2,
+  );
+  const bodyCandidates = collectCandidates(html, /<(body)\b[^>]*>/gi, 1);
+
   const candidates = [
-    ...collectCandidates(html, /<(article)\b[^>]*>/gi, 5),
-    ...collectCandidates(html, /<(main)\b[^>]*>/gi, 4),
-    ...collectCandidates(
-      html,
-      /<(div|section)\b(?=[^>]*\bclass=["'][^"']*(?:entry-content|post-content|wp-block-post-content|elementor-widget-theme-post-content|single-content|text_content)[^"']*["'])[^>]*>/gi,
-      3,
-    ),
-    ...collectCandidates(
-      html,
-      /<(div|section)\b(?=[^>]*\bdata-element-type=["']text["'])[^>]*>/gi,
-      2,
-    ),
-    ...collectCandidates(html, /<(body)\b[^>]*>/gi, 1),
+    ...articleCandidates,
+    ...mainCandidates,
+    ...contentCandidates,
+    ...textBlockCandidates,
+    ...bodyCandidates,
   ];
 
   if (candidates.length === 0) return html;
 
   candidates.sort((a, b) => b.priority - a.priority || b.score - a.score);
 
-  let primaryHtml = candidates[0].html;
+  const strongestContainer = [...articleCandidates, ...mainCandidates, ...contentCandidates]
+    .sort((a, b) => b.priority - a.priority || b.score - a.score)[0];
+  const combinedTextBlocks = textBlockCandidates.length > 1
+    ? textBlockCandidates.map(candidate => candidate.html).join('\n')
+    : null;
+  const combinedTextLength = combinedTextBlocks
+    ? extractPlainText(combinedTextBlocks).length
+    : 0;
+  const bestSingleTextBlockLength = textBlockCandidates
+    .sort((a, b) => b.score - a.score)[0]?.score ?? 0;
+
+  let primaryHtml = strongestContainer?.html ?? candidates[0].html;
+
+  if (
+    !strongestContainer &&
+    combinedTextBlocks &&
+    combinedTextLength > Math.max(300, bestSingleTextBlockLength * 1.25)
+  ) {
+    primaryHtml = combinedTextBlocks;
+  }
+
   if (!/<h1\b/i.test(primaryHtml)) {
     const h1 = html.match(/<h1\b[^>]*>[\s\S]*?<\/h1>/i)?.[0];
     if (h1) primaryHtml = `${h1}\n${primaryHtml}`;
