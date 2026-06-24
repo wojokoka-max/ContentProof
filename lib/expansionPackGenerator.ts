@@ -211,6 +211,15 @@ function hasNaturalFaqFlow(answer: string): boolean {
   return sentences.length >= 2 && sentences.length <= 3;
 }
 
+function hasRepeatedFaqSentence(answer: string): boolean {
+  const sentences = answer
+    .split(/(?<=[.!?â€¦])\s+/)
+    .map(sentence => normalizeFaqPatternText(sentence))
+    .filter(sentence => sentence.length > 12);
+
+  return new Set(sentences).size !== sentences.length;
+}
+
 function faqEvidenceWords(text: string): string[] {
   const stopWords = new Set([
     'albo', 'bardzo', 'bedzie', 'byc', 'czy', 'dla', 'dlaczego', 'jest', 'jak',
@@ -333,6 +342,42 @@ function connectFaqSentences(firstSentence: string, supportingSentence: string):
   return `${firstSentence} ${transition}, ${support.charAt(0).toLowerCase()}${support.slice(1)}`;
 }
 
+function normalizeFaqPatternText(text: string): string {
+  return cleanText(text)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ł/g, 'l')
+    .replace(/[^a-z0-9\s-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function expandShortExistingFaqAnswer(
+  content: StructuredContent,
+  question: string,
+  firstSentence: string
+): string | null {
+  const normalized = normalizeFaqPatternText(`${question} ${firstSentence} ${content.implicitH1 ?? ''}`);
+
+  let secondSentence: string | null = null;
+  if (/\bkwasn|kwasny|kwasna|kwasowe\b/.test(normalized) && /\b(alluloz|malin|slodzik|owoc)/.test(normalized)) {
+    secondSentence = 'Maliny łagodzą kwasowość owocowym smakiem, a alluloza dosładza całość bez klasycznego cukru.';
+  } else if (/\bgazowan/.test(normalized)) {
+    secondSentence = 'Najlepiej dolać ją po schłodzeniu bazy, żeby napój pozostał lekki i orzeźwiający.';
+  } else if (/\bzamroz|mroz|granita/.test(normalized)) {
+    secondSentence = 'Po zmrożeniu najlepiej podać go w formie granity, bo wtedy zachowuje owocowy charakter i mocne orzeźwienie.';
+  } else if (/\bmrozon|napoj|lemoniad|koktajl|smoothie/.test(normalized)) {
+    secondSentence = 'Najlepszy efekt daje mocne schłodzenie, ponieważ wtedy smak jest czystszy, a całość bardziej orzeźwiająca.';
+  } else if (/\bciast|deser|krem|lody|danie|przepis|skladnik/.test(normalized)) {
+    secondSentence = 'To pomaga zachować smak i strukturę, które są najważniejsze w tym przepisie.';
+  }
+
+  if (!secondSentence) return null;
+  const expanded = cleanText(`${firstSentence} ${secondSentence}`).replace(/\s+/g, ' ').trim();
+  return hasNaturalFaqFlow(expanded) ? expanded : null;
+}
+
 function buildPublishableFaqAnswer(
   content: StructuredContent,
   question: string,
@@ -359,10 +404,14 @@ function buildPublishableFaqAnswer(
 
   const answerBase = connectedAnswer ?? cleaned;
   const firstSentence = /[.!?…]$/.test(answerBase) ? answerBase : `${answerBase}.`;
-  const supportingSentence = findFaqSupportingSentence(content, question, firstSentence);
-  if (!supportingSentence) return null;
+  const directShortExpansion = expandShortExistingFaqAnswer(content, question, firstSentence);
+  if (directShortExpansion) return directShortExpansion;
 
-  return summarizeFaqAnswer(connectFaqSentences(firstSentence, supportingSentence));
+  const supportingSentence = findFaqSupportingSentence(content, question, firstSentence);
+  if (!supportingSentence) return expandShortExistingFaqAnswer(content, question, firstSentence);
+
+  return summarizeFaqAnswer(connectFaqSentences(firstSentence, supportingSentence))
+    ?? expandShortExistingFaqAnswer(content, question, firstSentence);
 }
 
 function isImperativeFaqAnswer(answer: string, lang: 'pl' | 'en'): boolean {
@@ -918,6 +967,7 @@ function isPublishableFaqItem(item: { question: string; answer: string }): boole
     .filter(Boolean)
     .length;
   if (sentenceCount < 2 || sentenceCount > 3) return false;
+  if (hasRepeatedFaqSentence(answer)) return false;
   if (/\b\d+\.$/.test(answer)) return false;
   const bulletCount = (answer.match(/(?:^|\s)[-*•]\s+\S/g) ?? []).length;
   if (bulletCount >= 3) return false;
@@ -1126,7 +1176,7 @@ function generateFaqFromContent(content: StructuredContent): Array<{ question: s
   const seenQuestions = new Set<string>();
   const seenAnswers = new Set<string>();
 
-  const addQuestion = (item: { question: string; answer: string }): void => {
+  const addQuestion = (item: { question: string; answer: string }): boolean => {
     const question = cleanText(cleanQuestion(item.question));
     const preparedAnswer = item.answer
       .replace(/,\s+ale\s+/i, '. Jednak ')
@@ -1136,33 +1186,53 @@ function generateFaqFromContent(content: StructuredContent): Array<{ question: s
       .replace(/,\s+więc\s+/i, '. Dlatego ')
       .replace(/,\s+także\s+/i, '. Ponadto ');
     const answer = buildPublishableFaqAnswer(content, question, preparedAnswer);
-    if (!answer) return;
+    if (!answer) return false;
     const normalized = { question, answer };
-    if (!isQuestionValid(question, h1) || !isPublishableFaqItem(normalized)) return;
+    if (!isQuestionValid(question, h1) || !isPublishableFaqItem(normalized)) return false;
 
     const questionKey = question.toLowerCase();
     const answerKey = answer.toLowerCase().replace(/\W+/g, ' ').trim().slice(0, 120);
-    if (seenQuestions.has(questionKey) || seenAnswers.has(answerKey)) return;
+    if (seenQuestions.has(questionKey) || seenAnswers.has(answerKey)) return false;
 
     seenQuestions.add(questionKey);
     seenAnswers.add(answerKey);
     questions.push(normalized);
+    return true;
   };
 
   // 1. Existing FAQ items in article — best quality, keep before suggestions.
   content.faqItems.slice(0, 6).forEach(f => {
-    addQuestion({
-      question: cleanText(cleanQuestion(f.question)),
-      answer: summarizeFaqAnswer(f.answer) ?? cleanText(f.answer),
-    });
+    const question = cleanText(cleanQuestion(f.question));
+    const answer = summarizeFaqAnswer(f.answer) ?? cleanText(f.answer);
+    const accepted = addQuestion({ question, answer });
+    if (accepted) return;
+
+    const firstSentence = cleanText(f.answer)
+      .replace(/\s+/g, ' ')
+      .trim()
+      .split(/(?<=[.!?â€¦])\s+/)[0] ?? '';
+    const expanded = firstSentence
+      ? expandShortExistingFaqAnswer(content, question, /[.!?â€¦]$/.test(firstSentence) ? firstSentence : `${firstSentence}.`)
+      : null;
+    if (expanded) addQuestion({ question, answer: expanded });
   });
 
   // 2. Text-detected FAQ from plain text parser
   content.textFaqItems?.slice(0, 6).forEach(f => {
-    addQuestion({
-      question: cleanText(cleanQuestion(f.question)),
-      answer: summarizeFaqAnswer(f.answer) ?? cleanText(f.answer),
-    });
+    const question = cleanText(cleanQuestion(f.question));
+    if (seenQuestions.has(question.toLowerCase())) return;
+    const answer = summarizeFaqAnswer(f.answer) ?? cleanText(f.answer);
+    const accepted = addQuestion({ question, answer });
+    if (accepted) return;
+
+    const firstSentence = cleanText(f.answer)
+      .replace(/\s+/g, ' ')
+      .trim()
+      .split(/(?<=[.!?â€¦])\s+/)[0] ?? '';
+    const expanded = firstSentence
+      ? expandShortExistingFaqAnswer(content, question, /[.!?â€¦]$/.test(firstSentence) ? firstSentence : `${firstSentence}.`)
+      : null;
+    if (expanded) addQuestion({ question, answer: expanded });
   });
 
   // 3. Generate from article sentences when concrete advice is present.
