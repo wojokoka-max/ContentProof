@@ -1,6 +1,8 @@
 import { auth, currentUser } from '@clerk/nextjs/server';
 import { getBillingAccess, type BillingPeriod } from './billing';
 
+const OWNER_GITHUB_USERNAMES = ['wojokoka-max'];
+
 export interface AccountAccess {
   configured: boolean;
   signedIn: boolean;
@@ -34,9 +36,7 @@ export async function getAccountAccess(): Promise<AccountAccess> {
   const user = await currentUser();
   const metadata = user?.publicMetadata ?? {};
   const email = user?.primaryEmailAddress?.emailAddress?.toLowerCase() ?? null;
-  const githubUsername = user?.externalAccounts
-    .find(account => account.provider === 'oauth_github')
-    ?.username?.toLowerCase() ?? null;
+  const githubIdentifiers = githubAccountIdentifiers(user?.externalAccounts ?? []);
   const premiumUserIds = (process.env.PREMIUM_USER_IDS ?? '')
     .split(',')
     .map(value => value.trim())
@@ -57,12 +57,16 @@ export async function getAccountAccess(): Promise<AccountAccess> {
     .split(',')
     .map(value => value.trim().toLowerCase())
     .filter(Boolean);
+  const ownerGithubUsernames = [
+    ...OWNER_GITHUB_USERNAMES,
+    ...adminGithubUsernames,
+  ];
   const isAdmin =
     metadata.role === 'admin' ||
     metadata.admin === true ||
     adminUserIds.includes(userId) ||
     (email ? adminEmails.includes(email) : false) ||
-    (githubUsername ? adminGithubUsernames.includes(githubUsername) : false);
+    githubIdentifiers.some(identifier => ownerGithubUsernames.includes(identifier));
   const billing = await getBillingAccess(userId);
   const isPremium =
     isAdmin ||
@@ -84,6 +88,24 @@ export async function getAccountAccess(): Promise<AccountAccess> {
     cancelAtPeriodEnd: billing.cancelAtPeriodEnd,
     currentPeriodEnd: billing.currentPeriodEnd,
   };
+}
+
+function githubAccountIdentifiers(
+  externalAccounts: NonNullable<Awaited<ReturnType<typeof currentUser>>>['externalAccounts']
+): string[] {
+  const githubAccount = externalAccounts.find(account => account.provider === 'oauth_github');
+  if (!githubAccount) return [];
+
+  const data = githubAccount as unknown as Record<string, unknown>;
+  return [
+    data.username,
+    data.externalUsername,
+    data.providerUserId,
+    data.externalId,
+  ]
+    .filter((value): value is string => typeof value === 'string')
+    .map(value => value.trim().toLowerCase())
+    .filter(Boolean);
 }
 
 function emptyAccountAccess(configured: boolean): AccountAccess {
