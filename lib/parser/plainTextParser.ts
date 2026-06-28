@@ -156,6 +156,40 @@ export function extractTextHeadings(lines: string[], h1Text: string | null, lang
 const PL_Q_WORDS = ['czy', 'jak', 'co', 'kiedy', 'gdzie', 'dlaczego', 'ile', 'kto', 'które', 'czym', 'po co', 'skąd'];
 const EN_Q_WORDS = ['what', 'how', 'why', 'when', 'where', 'who', 'which', 'can', 'does', 'is', 'are', 'do', 'will'];
 
+function normalizeTextLabel(line: string): string {
+  return line
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ł/g, 'l')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function isFaqHeading(line: string): boolean {
+  const normalized = normalizeTextLabel(line);
+  if (!normalized || normalized.length > 80) return false;
+
+  if ([
+    'faq',
+    'najczestsze pytania',
+    'najczesciej zadawane pytania',
+    'pytania i odpowiedzi',
+    'pytania odpowiedzi',
+    'questions and answers',
+    'frequently asked questions',
+  ].includes(normalized)) {
+    return true;
+  }
+
+  return /\bfaq\b/.test(normalized)
+    || /\bnajczestsze pytania\b/.test(normalized)
+    || /\bnajczesciej zadawane pytania\b/.test(normalized)
+    || /\bpytania i odpowiedzi\b/.test(normalized);
+}
+
 function looksLikeQuestion(line: string, lang: 'pl' | 'en'): boolean {
   const trimmed = line.trim();
   if (trimmed.endsWith('?')) return true;
@@ -166,9 +200,7 @@ function looksLikeQuestion(line: string, lang: 'pl' | 'en'): boolean {
 
 export function extractTextFaq(lines: string[], lang: 'pl' | 'en'): FaqItem[] {
   const items: FaqItem[] = [];
-  const faqHeadingIndex = lines.findIndex(line =>
-    /^(faq|najczęstsze pytania|pytania i odpowiedzi)$/i.test(line.trim())
-  );
+  const faqHeadingIndex = lines.findIndex(line => isFaqHeading(line));
   if (faqHeadingIndex < 0) return items;
 
   let i = faqHeadingIndex + 1;
