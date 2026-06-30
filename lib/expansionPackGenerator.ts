@@ -1168,6 +1168,69 @@ function h2ToQuestion(h2: string, lang: 'pl' | 'en'): string | null {
 
 // ─── Main FAQ generator ───────────────────────────────────────────────────────
 
+function stripHeadingNumbering(heading: string): string {
+  return cleanText(heading)
+    .replace(/^\s*\d+[.)]?\s*/, '')
+    .trim();
+}
+
+function htmlHeadingToQuestion(h2: string, lang: 'pl' | 'en'): string | null {
+  const heading = stripHeadingNumbering(h2);
+  if (!heading) return null;
+
+  const direct = h2ToQuestion(heading, lang);
+  if (direct) return direct;
+
+  if (lang !== 'pl') return null;
+
+  if (/^zrob porzadek z\s+/i.test(normalizeFaqPatternText(heading))) {
+    const topic = heading.replace(/^(?:zrób|zrob)\s+(?:porządek|porzadek)\s+z\s+/i, '').trim();
+    return topic ? `Jak zrobić porządek z ${topic}?` : null;
+  }
+
+  if (/^wybieraj\s+/i.test(heading)) {
+    const rest = heading.replace(/^wybieraj\s+/i, '').trim();
+    return rest ? `Jak wybierać ${rest}?` : null;
+  }
+
+  if (/^nie musisz\s+/i.test(heading)) {
+    const rest = heading.replace(/^nie musisz\s+/i, '').trim();
+    return rest ? `Czy trzeba ${rest}?` : null;
+  }
+
+  if (/^nie trzeba\s+/i.test(heading)) {
+    const rest = heading.replace(/^nie trzeba\s+/i, '').trim();
+    return rest ? `Czy trzeba ${rest}?` : null;
+  }
+
+  return null;
+}
+
+function generateHtmlFaqFallback(
+  content: StructuredContent,
+  h1: string
+): Array<{ question: string; answer: string }> {
+  if (content.analysisMode !== 'html') return [];
+
+  const questions: Array<{ question: string; answer: string }> = [];
+  const h2s = content.headings.filter(h => h.level === 2).map(h => h.text);
+
+  for (const h2 of h2s) {
+    if (/^(faq|najczęstsze pytania|czesto zadawane pytania)$/i.test(stripHeadingNumbering(h2))) continue;
+
+    const question = htmlHeadingToQuestion(h2, content.language);
+    if (!question || !isQuestionValid(question, h1)) continue;
+
+    const answer = answerFromSection(content, h2);
+    if (!answer) continue;
+
+    questions.push({ question, answer });
+    if (questions.length >= 3) break;
+  }
+
+  return questions;
+}
+
 function generateFaqFromContent(content: StructuredContent): Array<{ question: string; answer: string }> {
   const minimumGeneratedFaqCount = 3;
   const lang = content.language;
@@ -1266,6 +1329,14 @@ function generateFaqFromContent(content: StructuredContent): Array<{ question: s
   // 6. Recipes need supplementary questions only when direct sections are insufficient.
   generateRecipeFaqFromEvidence(content, h1).forEach(addQuestion);
   generateRecipeProcessFaq(content, h1).forEach(addQuestion);
+
+  if (content.analysisMode === 'html' && questions.length < minimumGeneratedFaqCount) {
+    const htmlFallback = generateHtmlFaqFallback(content, h1);
+    for (const item of htmlFallback) {
+      addQuestion(item);
+      if (questions.length >= minimumGeneratedFaqCount) break;
+    }
+  }
 
   if (content.analysisMode === 'url' && questions.length < minimumGeneratedFaqCount) {
     const urlFallback = generateUrlFaqFallback(content, h1);
