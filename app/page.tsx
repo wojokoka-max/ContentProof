@@ -10,6 +10,21 @@ import { FetchDebugPanel } from '@/components/FetchDebugPanel';
 import { AccountControls, type AccountState } from '@/components/AccountControls';
 import { HistoryPanel } from '@/components/HistoryPanel';
 
+const HOME_FAQ = [
+  {
+    question: 'Do czego służy ContentProof?',
+    answer: 'ContentProof pomaga sprawdzić jakość treści przed publikacją i po opublikowaniu. Analizuje strukturę artykułu, SEO, meta dane, FAQ, czytelność oraz elementy techniczne ważne dla widoczności w Google.',
+  },
+  {
+    question: 'Czy ContentProof jest tylko dla specjalistów SEO?',
+    answer: 'Nie. Narzędzie jest tworzone przede wszystkim dla twórców treści, blogerów, właścicieli stron i małych firm. Wyniki mają być gotowe do wykorzystania, bez konieczności czytania kodu lub dokumentacji technicznej.',
+  },
+  {
+    question: 'Jakie treści można analizować?',
+    answer: 'Można analizować zwykły tekst, opublikowany adres URL oraz kod HTML. Dzięki temu ContentProof sprawdza zarówno szkice przed publikacją, jak i artykuły, które są już dostępne w internecie.',
+  },
+];
+
 type AppState =
   | { phase: 'input' }
   | { phase: 'loading'; content: string; analysisId: string }
@@ -187,9 +202,27 @@ export default function Home() {
   }
 
   const saveAccess = getSaveAccess(account, saveStatus);
+  const homeFaqSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: HOME_FAQ.map(item => ({
+      '@type': 'Question',
+      name: item.question,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: item.answer,
+      },
+    })),
+  };
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--white)' }}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(homeFaqSchema).replace(/</g, '\\u003c'),
+        }}
+      />
 
       {/* ── Top bar ──────────────────────────────────────────────────────────── */}
       <header className="app-header" style={{
@@ -259,6 +292,7 @@ export default function Home() {
               )}
               <Features />
               <ProductOverview />
+              <HomeFaq />
             </div>
           </>
         )}
@@ -432,6 +466,28 @@ function ProductOverview() {
       <div className="product-overview-footer">
         <p>Tryb tekstowy jest dostępny bezpłatnie. Analiza URL i HTML należy do Premium.</p>
         <Link href="/pricing" className="header-link">Porównaj plany</Link>
+      </div>
+    </section>
+  );
+}
+
+function HomeFaq() {
+  return (
+    <section className="product-overview" aria-labelledby="home-faq-title">
+      <div className="product-overview-heading">
+        <h2 id="home-faq-title">Najczęstsze pytania o ContentProof</h2>
+        <p>
+          Krótko i konkretnie: co sprawdza narzędzie, dla kogo jest i kiedy warto go użyć.
+        </p>
+      </div>
+
+      <div className="product-overview-grid">
+        {HOME_FAQ.map(item => (
+          <div key={item.question}>
+            <h3>{item.question}</h3>
+            <p>{item.answer}</p>
+          </div>
+        ))}
       </div>
     </section>
   );
