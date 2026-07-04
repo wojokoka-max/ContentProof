@@ -733,6 +733,57 @@ function isPrimaryProcedureHeading(heading: string): boolean {
   );
 }
 
+function lowercaseFirstLetter(text: string): string {
+  const cleaned = cleanText(text).trim();
+  if (!cleaned) return cleaned;
+  return cleaned.charAt(0).toLowerCase() + cleaned.slice(1);
+}
+
+function urlHeadingToQuestion(heading: string, lang: 'pl' | 'en'): string | null {
+  const directQuestion = h2ToQuestion(heading, lang);
+  if (directQuestion) return directQuestion;
+
+  const cleaned = stripHeadingNumbering(heading);
+  if (!cleaned || isPrimaryProcedureHeading(cleaned)) return null;
+
+  const wordCount = cleaned.split(/\s+/).filter(Boolean).length;
+  if (wordCount < 2 || wordCount > 9) return null;
+
+  return lang === 'pl'
+    ? `Jak rozumieć ${lowercaseFirstLetter(cleaned)}?`
+    : `How should readers understand ${lowercaseFirstLetter(cleaned)}?`;
+}
+
+function generateUrlSectionFaqFallback(
+  content: StructuredContent,
+  h1: string
+): Array<{ question: string; answer: string }> {
+  if (content.analysisMode !== 'url') return [];
+
+  const items: Array<{ question: string; answer: string }> = [];
+  const seen = new Set<string>();
+  const sectionHeadings = content.headings
+    .filter(heading => heading.level >= 2 && heading.level <= 3)
+    .map(heading => heading.text);
+
+  for (const heading of sectionHeadings) {
+    const question = cleanQuestion(urlHeadingToQuestion(heading, content.language) ?? '');
+    if (!question || !isQuestionValid(question, h1)) continue;
+
+    const key = normalizeFaqPatternText(question);
+    if (!key || seen.has(key)) continue;
+
+    const answer = answerFromSection(content, heading);
+    if (!answer || !isPublishableFaqItem({ question, answer }) || !hasNaturalFaqFlow(answer)) continue;
+
+    seen.add(key);
+    items.push({ question, answer });
+    if (items.length >= 3) break;
+  }
+
+  return items;
+}
+
 function generateUrlFaqFallback(
   content: StructuredContent,
   h1: string
@@ -748,7 +799,7 @@ function generateUrlFaqFallback(
     });
   }
 
-  return candidates
+  const specificItems = candidates
     .map(candidate => ({
       question: candidate.question,
       answer: answerFromArticleSentences(content, candidate.patterns) ?? '',
@@ -759,6 +810,17 @@ function generateUrlFaqFallback(
       isPublishableFaqItem(item) &&
       hasNaturalFaqFlow(item.answer)
     );
+
+  const seen = new Set(specificItems.map(item => normalizeFaqPatternText(item.question)));
+  const sectionItems = generateUrlSectionFaqFallback(content, h1)
+    .filter(item => {
+      const key = normalizeFaqPatternText(item.question);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+  return [...specificItems, ...sectionItems];
 }
 
 function generateFaqFromArticleSentences(
@@ -1353,9 +1415,29 @@ function generateFaqFromContent(content: StructuredContent): Array<{ question: s
 
 // ─── Internal link suggestions ────────────────────────────────────────────────
 
+function isUsefulVerifiedInternalLink(link: StructuredContent['links'][number], content: StructuredContent): boolean {
+  if (!link.isInternal || link.anchorText.trim().length === 0 || link.href.trim().length === 0) return false;
+  if (content.analysisMode !== 'url') return true;
+
+  const href = link.href.trim();
+  const anchor = cleanText(link.anchorText);
+  const normalizedAnchor = normalizeFaqPatternText(anchor);
+
+  if (href === '/' || href === './' || href.startsWith('#')) return false;
+  if (href.includes('#')) return false;
+  if (href.includes('?')) return false;
+  if (/\/szukaj\b/i.test(href)) return false;
+  if (/^(strona glowna|home|start|menu|kontakt|przyroda|szkola podstawowa|szkola podstawowa iv viii)$/i.test(normalizedAnchor)) {
+    return false;
+  }
+  if (normalizedAnchor.length < 8) return false;
+
+  return true;
+}
+
 function generateVerifiedInternalLinks(content: StructuredContent): Array<{ anchorText: string; suggestedSlug: string }> {
   return content.links
-    .filter(link => link.isInternal && link.anchorText.trim().length > 0 && link.href.trim().length > 0)
+    .filter(link => isUsefulVerifiedInternalLink(link, content))
     .map(link => ({
       anchorText: cleanText(link.anchorText),
       suggestedSlug: link.href,

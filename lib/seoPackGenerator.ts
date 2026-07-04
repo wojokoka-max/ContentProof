@@ -159,6 +159,50 @@ function titleKeywords(title: string): string[] {
     .filter(word => word.length >= 4 && !stopWords.has(word));
 }
 
+function importantMetaWords(text: string): string[] {
+  const stopWords = new Set([
+    'oraz', 'jest', 'jako', 'ktore', 'ktory', 'ktora', 'przez', 'tego', 'tych',
+    'this', 'that', 'with', 'from', 'your',
+  ]);
+
+  return normalizeForMatch(text)
+    .split(' ')
+    .filter(word => word.length >= 5 && !stopWords.has(word));
+}
+
+function isGenericUrlMetaDescription(description: string): boolean {
+  const normalized = normalizeForMatch(description);
+  return (
+    normalized.includes('e podreczniki') ||
+    normalized.includes('bezplatne i dostepne dla wszystkich materialy edukacyjne') ||
+    normalized.includes('bezplatne materialy edukacyjne') ||
+    normalized.includes('strona glowna') ||
+    normalized.includes('oficjalna strona')
+  );
+}
+
+function isRelevantUrlMetaDescription(
+  description: string,
+  title: string,
+  content: StructuredContent
+): boolean {
+  if (content.analysisMode !== 'url') return true;
+  if (isGenericUrlMetaDescription(description)) return false;
+
+  const normalizedDescription = normalizeForMatch(description);
+  const normalizedArticleText = normalizeForMatch(content.plainText.slice(0, 4000));
+  const keywords = titleKeywords(title);
+  const titleOverlap = keywords.filter(keyword => normalizedDescription.includes(keyword)).length;
+  if (titleOverlap >= 2 || (keywords.length <= 2 && titleOverlap >= 1)) return true;
+
+  const descriptionWords = importantMetaWords(description);
+  if (descriptionWords.length === 0) return false;
+
+  const articleOverlap = descriptionWords.filter(word => normalizedArticleText.includes(word)).length;
+  const neededOverlap = Math.min(3, Math.max(2, Math.ceil(descriptionWords.length * 0.35)));
+  return articleOverlap >= neededOverlap && keywords.some(keyword => normalizedArticleText.includes(keyword));
+}
+
 function isProceduralInstruction(text: string): boolean {
   const cleaned = safeTextCandidate(text).toLowerCase();
   if (!cleaned) return false;
@@ -774,7 +818,12 @@ function buildDescriptionFromContent(content: StructuredContent, title: string):
 
 function generateMetaDescription(content: StructuredContent, title: string): string {
   const existingDescription = safeTextCandidate(content.metaDescription);
-  if (existingDescription && existingDescription.length >= 70 && existingDescription.length <= 160) {
+  if (
+    existingDescription &&
+    existingDescription.length >= 70 &&
+    existingDescription.length <= 160 &&
+    isRelevantUrlMetaDescription(existingDescription, title, content)
+  ) {
     const improvedDescription = content.language === 'pl'
       ? improveExistingRecipeDescription(existingDescription, title, content)
       : '';
