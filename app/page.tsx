@@ -23,6 +23,14 @@ const HOME_FAQ = [
     question: 'Jakie treści można analizować?',
     answer: 'Można analizować zwykły tekst, opublikowany adres URL oraz kod HTML. Dzięki temu ContentProof sprawdza zarówno szkice przed publikacją, jak i artykuły, które są już dostępne w internecie.',
   },
+  {
+    question: 'Czy ContentProof przygotowuje meta title i meta description?',
+    answer: 'Tak. ContentProof przygotowuje propozycje meta title i meta description na podstawie realnej treści artykułu. Opisy mają być gotowe do wklejenia, naturalne i dopasowane do intencji czytelnika.',
+  },
+  {
+    question: 'Czy ContentProof pomaga z FAQ i schema.org?',
+    answer: 'Tak. Narzędzie przygotowuje pytania i odpowiedzi FAQ oraz dane strukturalne JSON-LD, które można wkleić do strony. Celem jest lepszy kontekst semantyczny artykułu i czytelniejszy SEO Pack.',
+  },
 ];
 
 type AppState =
@@ -292,6 +300,8 @@ export default function Home() {
               )}
               <Features />
               <ProductOverview />
+              <SeoLandingContent />
+              <EcosystemSection />
               <HomeFaq />
             </div>
           </>
@@ -466,6 +476,102 @@ function ProductOverview() {
       <div className="product-overview-footer">
         <p>Tryb tekstowy jest dostępny bezpłatnie. Analiza URL i HTML należy do Premium.</p>
         <Link href="/pricing" className="header-link">Porównaj plany</Link>
+      </div>
+    </section>
+  );
+}
+
+function SeoLandingContent() {
+  return (
+    <section className="product-overview" aria-labelledby="seo-landing-title">
+      <div className="product-overview-heading">
+        <h2 id="seo-landing-title">ContentProof jako narzędzie do analizy SEO treści</h2>
+        <p>
+          ContentProof jest narzędziem SaaS dla osób, które publikują artykuły,
+          poradniki, wpisy blogowe, opisy usług i treści sprzedażowe. Pomaga
+          sprawdzić, czy tekst jest zrozumiały, uporządkowany i przygotowany do
+          publikacji w Google.
+        </p>
+      </div>
+
+      <div className="product-overview-grid">
+        <div>
+          <h3>Gotowe elementy SEO</h3>
+          <p>
+            Po analizie otrzymujesz propozycje meta title, meta description,
+            canonical URL, Open Graph, Twitter Card, robots oraz schema.org w
+            formacie JSON-LD. To nie jest raport techniczny dla developerów, ale
+            zestaw gotowych fragmentów do użycia w CMS.
+          </p>
+        </div>
+        <div>
+          <h3>Wsparcie dla twórców</h3>
+          <p>
+            Narzędzie zwraca uwagę na strukturę nagłówków, brakujące sekcje,
+            FAQ, linkowanie wewnętrzne, obrazy, czytelność i powtarzalne błędy
+            językowe. Dzięki temu łatwiej poprawić tekst przed publikacją albo
+            uporządkować artykuł, który już działa w internecie.
+          </p>
+        </div>
+        <div>
+          <h3>Kontrola po publikacji</h3>
+          <p>
+            Analiza URL pomaga sprawdzić opublikowaną stronę: tytuł, opis,
+            nagłówki, canonical, linki, obrazy i dane strukturalne. To przydaje
+            się szczególnie wtedy, gdy artykuł jest już w WordPressie, WebWave
+            albo innym systemie CMS.
+          </p>
+        </div>
+      </div>
+
+      <div className="product-overview-footer">
+        <p>
+          ContentProof łączy analizę jakości treści, podstawy SEO on-page i
+          gotowe propozycje tekstów, które można wdrożyć bez pracy w kodzie.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function EcosystemSection() {
+  return (
+    <section className="product-overview" aria-labelledby="ecosystem-title">
+      <div className="product-overview-heading">
+        <h2 id="ecosystem-title">Część ekosystemu narzędzi NextDoor Studio</h2>
+        <p>
+          ContentProof jest rozwijany jako pierwsze narzędzie w spokojnym
+          ekosystemie aplikacji do pracy z treścią, SEO i procesem publikacji.
+          Kolejne produkty będą wspierać analizę większych serwisów, planowanie
+          tematów i porządkowanie całego content marketingu.
+        </p>
+      </div>
+
+      <div className="product-overview-grid">
+        <div>
+          <h3>ContentProof</h3>
+          <p>
+            Narzędzie do pojedynczej analizy artykułu, szkicu, strony URL lub
+            kodu HTML. Pomaga przygotować SEO Pack, FAQ, schema.org i konkretne
+            rekomendacje dla autora treści.
+          </p>
+        </div>
+        <div>
+          <h3>ContentEcosystemAnalyzer</h3>
+          <p>
+            Siostrzany projekt planowany z myślą o szerszej analizie serwisów:
+            strukturze tematów, powiązaniach między artykułami, lukach
+            semantycznych i długofalowej strategii treści.
+          </p>
+        </div>
+        <div>
+          <h3>NextDoor Studio</h3>
+          <p>
+            Studio tworzące minimalistyczne narzędzia dla twórców, małych firm i
+            osób publikujących online. Wspólny kierunek to mniej chaosu, więcej
+            jasnych decyzji i praktyczne wsparcie w codziennej pracy.
+          </p>
+        </div>
       </div>
     </section>
   );

@@ -137,7 +137,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           'Analiza kodu HTML',
           'SEO Pack z meta title i meta description',
           'FAQ i JSON-LD schema',
+          'Canonical URL, Open Graph, Twitter Card i robots',
           'Historia analiz w planie Premium',
+        ],
+        about: [
+          'analiza SEO treści',
+          'audyt artykułu',
+          'content quality',
+          'publishing workflow',
+          'FAQ schema',
+          'meta title',
+          'meta description',
         ],
         audience: {
           '@type': 'Audience',
