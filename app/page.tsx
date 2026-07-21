@@ -9,6 +9,7 @@ import { AnalysisReport }  from '@/components/AnalysisReport';
 import { FetchDebugPanel } from '@/components/FetchDebugPanel';
 import { AccountControls, type AccountState } from '@/components/AccountControls';
 import { HistoryPanel } from '@/components/HistoryPanel';
+import { isCrawlerUserAgent } from '@/lib/crawler';
 
 const HOME_FAQ = [
   {
@@ -65,12 +66,18 @@ export default function Home() {
   const [adminHistoryOpen, setAdminHistoryOpen] = useState(false);
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [isCrawlerClient, setIsCrawlerClient] = useState(false);
   const currentAnalysisIdRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const authEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+  const accountAuthEnabled = authEnabled && !isCrawlerClient;
 
   useEffect(() => {
-    if (!authEnabled) return;
+    setIsCrawlerClient(isCrawlerUserAgent(navigator.userAgent));
+  }, []);
+
+  useEffect(() => {
+    if (!accountAuthEnabled) return;
 
     let active = true;
     fetch('/api/account', { cache: 'no-store' })
@@ -102,7 +109,7 @@ export default function Home() {
     return () => {
       active = false;
     };
-  }, [authEnabled]);
+  }, [accountAuthEnabled]);
 
   async function handleAnalyze(content: string, mode: InputMode = 'text', metaInput?: MetaInput) {
     const analysisId = crypto.randomUUID();
@@ -261,7 +268,7 @@ export default function Home() {
             </div>
           )}
           <AccountControls
-            authEnabled={authEnabled}
+            authEnabled={accountAuthEnabled}
             account={account}
             onOpenHistory={() => setHistoryOpen(true)}
             onOpenAdminHistory={() => setAdminHistoryOpen(true)}

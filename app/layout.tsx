@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { ClerkProvider } from '@clerk/nextjs';
+import { headers } from 'next/headers';
 import { SiteFooter } from '@/components/SiteFooter';
+import { isCrawlerUserAgent } from '@/lib/crawler';
 import './globals.css';
 
 const SITE_URL = 'https://www.contentproof.pl';
@@ -85,6 +87,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const authEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+  const userAgent = headers().get('user-agent') ?? '';
+  const shouldLoadAuth = authEnabled && !isCrawlerUserAgent(userAgent);
   const structuredData = {
     '@context': 'https://schema.org',
     '@graph': [
@@ -206,7 +210,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   );
 
-  if (authEnabled) {
+  if (shouldLoadAuth) {
     return <ClerkProvider>{content}</ClerkProvider>;
   }
 
