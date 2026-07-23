@@ -5,6 +5,7 @@ export function SiteFooter() {
     <footer className="site-footer no-print">
       <div className="site-footer-inner">
         <nav className="site-footer-links" aria-label="Linki w stopce">
+          <Link href="/instrukcja">Instrukcja</Link>
           <Link href="/pricing">Cennik</Link>
           <a href="mailto:kontakt@nextdoorstudio.pl">Kontakt</a>
           <a

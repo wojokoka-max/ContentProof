@@ -787,6 +787,227 @@ body {
   flex: 0 0 auto;
 }
 
+/* Instructions */
+.instructions-page {
+  width: min(820px, 100%);
+  margin: 0 auto;
+  padding: 24px 24px 72px;
+}
+
+.instructions-topbar {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 44px;
+}
+
+.instructions-hero {
+  max-width: 680px;
+  margin-bottom: 48px;
+}
+
+.instructions-eyebrow {
+  margin: 0 0 10px;
+  color: var(--ink-60);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+
+.instructions-hero h1,
+.instructions-section h2,
+.instructions-note h2,
+.instructions-actions h2 {
+  font-family: var(--font-display);
+  letter-spacing: 0;
+}
+
+.instructions-hero h1 {
+  margin: 0 0 14px;
+  font-size: clamp(32px, 5vw, 46px);
+  line-height: 1.1;
+}
+
+.instructions-hero > p:last-child {
+  margin: 0;
+  color: var(--ink-60);
+  font-size: 17px;
+  line-height: 1.65;
+}
+
+.instructions-section,
+.instructions-note {
+  padding: 28px 0;
+  border-top: 1px solid var(--ink-10);
+}
+
+.instructions-section h2,
+.instructions-note h2,
+.instructions-actions h2 {
+  margin: 0 0 10px;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.instructions-section > p,
+.instructions-note p {
+  max-width: 700px;
+  margin: 0 0 12px;
+  color: var(--ink-60);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.instructions-section > p:last-child,
+.instructions-note p:last-child {
+  margin-bottom: 0;
+}
+
+.instructions-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.instructions-mode-grid article {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--ink-10);
+  border-radius: 8px;
+  background: var(--white);
+}
+
+.instructions-mode-grid h3,
+.instructions-steps h3 {
+  margin: 0 0 7px;
+  font-family: var(--font-display);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.instructions-mode-grid p,
+.instructions-steps p {
+  margin: 0;
+  color: var(--ink-60);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.instructions-steps {
+  display: grid;
+  gap: 16px;
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.instructions-steps li {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 14px;
+}
+
+.instructions-steps li > span {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--white);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.instructions-results {
+  display: grid;
+  margin: 22px 0 0;
+}
+
+.instructions-results div {
+  padding: 16px 0;
+  border-top: 1px solid var(--ink-10);
+}
+
+.instructions-results div:last-child {
+  border-bottom: 1px solid var(--ink-10);
+}
+
+.instructions-results dt {
+  margin-bottom: 5px;
+  font-weight: 650;
+  font-size: 14px;
+}
+
+.instructions-results dd {
+  margin: 0;
+  color: var(--ink-60);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.instructions-note {
+  margin-top: 4px;
+}
+
+.instructions-actions {
+  margin-top: 18px;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border: 1px solid var(--ink);
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--white);
+}
+
+.instructions-actions h2 {
+  margin-bottom: 6px;
+  font-size: 19px;
+}
+
+.instructions-actions p {
+  max-width: 440px;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.instructions-actions-links {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
+}
+
+.instructions-primary-action,
+.instructions-secondary-action {
+  min-height: 38px;
+  padding: 9px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--white);
+  border-radius: 7px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.instructions-primary-action {
+  background: var(--white);
+  color: var(--ink);
+}
+
+.instructions-secondary-action {
+  color: var(--white);
+}
+
 @media (max-width: 640px) {
   .site-footer-inner {
     min-height: 0;
@@ -866,6 +1087,41 @@ body {
   .pricing-credit-pack {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .header-help-link {
+    display: none;
+  }
+
+  .instructions-page {
+    padding: 14px 16px 48px;
+  }
+
+  .instructions-topbar {
+    margin-bottom: 30px;
+  }
+
+  .instructions-hero {
+    margin-bottom: 36px;
+  }
+
+  .instructions-mode-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .instructions-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .instructions-actions-links {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .instructions-primary-action,
+  .instructions-secondary-action {
+    width: 100%;
   }
 
   .pricing-subscription-status {

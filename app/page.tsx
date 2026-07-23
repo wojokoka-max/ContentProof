@@ -261,6 +261,7 @@ export default function Home() {
           <span className="app-version-badge" style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--ink-40)', background: 'var(--ink-5)', padding: '2px 6px', borderRadius: 4 }}>MVP</span>
         </div>
         <div className="app-header-actions" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <Link href="/instrukcja" className="header-link header-help-link">Instrukcja</Link>
           {state.phase === 'result' && (
             <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--ink-60)' }}>
               <span>Wynik:</span>
